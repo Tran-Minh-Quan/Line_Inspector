@@ -9,7 +9,7 @@ import numpy as np
 import random
 import matplotlib.pyplot as plt
 import xml.etree.ElementTree as ET
-from Tho.Distance_estimate import Distance_functions as Tho
+from Tho import Distance_functions as Tho
 
 def pyramid(image, scale=1, minSize=(30, 30)):
   while True:
@@ -45,21 +45,19 @@ def Demo(scaleim, cam, vector_w, normalValue=40, offset=5):
     term_crit = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 1)
     track_window = (0, 0, 95 - 75, 420 - 220)
     Image_show = cv2.imread('An/imagezero.jpg')
-    out = cv2.VideoWriter('An/VIDEO1.avi', cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'), 10, (1280, 480))
-    a = "An/yolov" + str(3) + ".cfg"
+    out = cv2.VideoWriter('An/result_backup.avi', cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'), 10, (1280, 480))
 
-    net = cv2.dnn.readNetFromDarknet(a, "An/yolov3_best.weights")
+    net = cv2.dnn.readNetFromDarknet("Model/YOLOv3/yolov3.cfg", "Model/YOLOv3/yolov3_best.weights")
     net.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
     net.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
     classes = []
-    with open("An/obj.names", "r") as f:
+    with open("Model/YOLOv3/obj.names", "r") as f:
         classes = [line.strip() for line in f.readlines()]
     layer_names = net.getLayerNames()
     output_layers = [layer_names[i[0] - 1] for i in net.getUnconnectedOutLayers()]
     # tai anh/video
     start = time.time()
     cap = cv2.VideoCapture(cam)
-
 
     frame_id = 0
     while True:
@@ -74,7 +72,7 @@ def Demo(scaleim, cam, vector_w, normalValue=40, offset=5):
 
         height, width,channels = image.shape
         # nhandien
-        blob = cv2.dnn.blobFromImage(image, 0.00392, (416, 416), (0, 0, 0), True, crop=False)
+        blob = cv2.dnn.blobFromImage(image, 1/255, (416, 416), (0, 0, 0), True, crop=False)
 
         net.setInput(blob)
         outs = net.forward(output_layers)
@@ -88,7 +86,7 @@ def Demo(scaleim, cam, vector_w, normalValue=40, offset=5):
                 scores = detection[5:]
                 class_id = np.argmax(scores)
                 confidence = scores[class_id]
-                if confidence > 0.5:
+                if confidence > 0:
                     center_x = int(detection[0] * width)
                     center_y = int(detection[1] * height)
                     w = int(detection[2] * width)
@@ -100,7 +98,7 @@ def Demo(scaleim, cam, vector_w, normalValue=40, offset=5):
                     boxes.append([x, y, w, h])
                     confidences.append(float(confidence))
                     detector_idxs.append(class_id)
-        indexes = cv2.dnn.NMSBoxes(boxes, confidences, 0.5, 0.4)
+        indexes = cv2.dnn.NMSBoxes(boxes, confidences, 0, 0.4)
         x=0
         y=0
         w=0
@@ -121,6 +119,9 @@ def Demo(scaleim, cam, vector_w, normalValue=40, offset=5):
                 dis1 = 0
                 dis2 = 0
                 dis3 = 0
+                frball = 0
+                frta = 0
+                frkhoa = 0
                 if (detector_idxs[i] == 0):
                     dis1 = w_0 + w_1 * x + w_2 * y + w_3 * w + w_4 * h
                     frball += 1
