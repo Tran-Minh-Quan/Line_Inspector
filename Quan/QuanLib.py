@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_absolute_error
 from sklearn.metrics import max_error
+
 #hieu chinh gamma cho mot anh hoac cho folder anh
 def gamma_correct(img_dir='',data_dir='',gamma=1,save_dir=''):
     #kiem tra xem img_dir va data_dir co dong thoi ton tai hay khong
@@ -34,6 +35,8 @@ def gamma_correct(img_dir='',data_dir='',gamma=1,save_dir=''):
             #cv2.waitKey(0)
             cv2.imwrite(save_dir + '\\' + i, result_img)
     return
+
+
 def CaptureSample(save_dir='',extention='.jpg',cam=0,heigth=480,width=640,color=1,dmin=20,dmax=60):
     cap=cv2.VideoCapture(cam)
     #cap.set(4,int(heigth) )
@@ -73,18 +76,20 @@ def CaptureSample(save_dir='',extention='.jpg',cam=0,heigth=480,width=640,color=
     cap.release()
     cv2.destroyAllWindows()
 
-
-def linear_regression(data_dir='',weights_dir='D:\\WON\\DO_AN\\Code\\Model\\YOLOv3\\yolov3_best.weights',
-                      cfg_dir='D:\\WON\\DO_AN\\Code\\Model\\YOLOv3\\yolov3.cfg',
-                      names_dir='D:\\WON\\DO_AN\\Code\\Model\\YOLOv3\\obj.names'):
-    #array chua cac ten anh trong thu muc co duong dan data_dir
+#Lay du lieu khoang cach va nghich dao do dai box tu data_dir
+def getdata4linReg(data_dir='',
+                   weights_dir='yolov3_best.weights',
+                   cfg_dir='yolov3.cfg',
+                   names_dir='obj.names',
+                   save_dir=''):
+    # array chua cac ten anh trong thu muc co duong dan data_dir
     img_array = os.listdir(data_dir)
-    #array chua khoang cach thuc cua moi anh
+    # array chua khoang cach thuc cua moi anh
     dis_array = np.array([])
-    #array chua do dai bounding box duoc tao tu yolov3
+    # array chua nghich dao do dai bounding box duoc tao tu yolov3
     inv_w_array = np.array([])
 
-    #khoi tao mang yolov3
+    # khoi tao mang yolov3
     net = cv2.dnn.readNetFromDarknet(cfg_dir, weights_dir)
     net.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
     net.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
@@ -95,13 +100,13 @@ def linear_regression(data_dir='',weights_dir='D:\\WON\\DO_AN\\Code\\Model\\YOLO
     output_layers = [layer_names[i[0] - 1] for i in net.getUnconnectedOutLayers()]
 
     for i in img_array:
-        frame = cv2.imread(data_dir+'\\'+i)
+        frame = cv2.imread(data_dir + '\\' + i)
         img = frame.copy()
-        #image = pyramid(img, scaleim)
+        # image = pyramid(img, scaleim)
 
         height, width, channels = img.shape
         # nhandien
-        blob = cv2.dnn.blobFromImage(img, 1/255, (416, 416), (0, 0, 0), True, crop=False)
+        blob = cv2.dnn.blobFromImage(img, 1 / 255, (416, 416), (0, 0, 0), True, crop=False)
 
         net.setInput(blob)
         outs = net.forward(output_layers)
@@ -134,23 +139,29 @@ def linear_regression(data_dir='',weights_dir='D:\\WON\\DO_AN\\Code\\Model\\YOLO
         h = 0
         for j in range(len(boxes)):
             if j in indexes:
-                # tao mang chua cac gia tri do dai bounding box
                 x, y, w, h = boxes[j]
-                inv_w_array = np.append(inv_w_array,1/w)
-                # tao mang chua cac gia tri khoang cach
+                # Lay data cho mang inv_w_array
+                inv_w_array = np.append(inv_w_array, 1 / w)
+                # Lay data cho mang dis_array
                 dis_array = np.append(dis_array, [float(i.split('.')[0])])
-                #print(w)
-                cv2.rectangle(img, (x, y), (x + w, y + h), (0, 250, 0), 2)
-                cv2.putText(img, str(detector_idxs[j]) + '  ' + str(np.round(confidences[j] * 100, 2)) + '%',
+                # Luu cac mang duoi dang file .npy
+                # print(w)
+                #cv2.rectangle(img, (x, y), (x + w, y + h), (0, 250, 0), 2)
+                '''cv2.putText(img, str(detector_idxs[j]) + '  ' + str(np.round(confidences[j] * 100, 2)) + '%',
                             (x, y),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (250, 0, 0), 1, lineType=cv2.LINE_AA)
-                #cv2.imshow(i, img)
-                #cv2.waitKey(0)
-    inv_w_array = np.reshape(inv_w_array,(-1,1))
-    print(dis_array)
-    #print(len(dis_arr))
-    print(inv_w_array)
-    #print(len(bbwid_arr))
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (250, 0, 0), 1, lineType=cv2.LINE_AA)'''
+                # cv2.imshow(i, img)
+                # cv2.waitKey(0)
+    np.save(save_dir + '\\inv_w_array.npy', inv_w_array)
+    np.save(save_dir + '\\dis_array.npy', dis_array)
+    return
+
+
+def linear_regression(inv_w_array_dir = '',dis_array_dir = ''):
+    # Lay du lieu nghich dao do dai box va khoang cach tu file .npy
+    inv_w_array = np.load(inv_w_array_dir).reshape(-1,1)
+    dis_array = np.load(dis_array_dir)
+
     plt.plot(inv_w_array,dis_array, 'o')
     #a, b = np.polyfit(inv_w_array,dis_array,1)
     model = LinearRegression().fit(inv_w_array,dis_array)
@@ -168,10 +179,16 @@ def linear_regression(data_dir='',weights_dir='D:\\WON\\DO_AN\\Code\\Model\\YOLO
     plt.show()
     return
 
-linear_regression(data_dir='D:\\WON\\DO_AN\\Changed_data',
-                  weights_dir='D:\\WON\\DO_AN\\Code\\Model\\YOLOv3\\yolov3_best.weights',
-                      cfg_dir='D:\\WON\\DO_AN\\Code\\Model\\YOLOv3\\yolov3.cfg',
-                      names_dir='D:\\WON\\DO_AN\\Code\\Model\\YOLOv3\\obj.names')
+
+
+
+linear_regression(inv_w_array_dir='D:\\WON\\DO_AN\\Code\\Quan\\inv_w_array.npy',
+                  dis_array_dir='D:\\WON\\DO_AN\\Code\\Quan\\dis_array.npy')
 
 '''cv2.imshow("result",gamma_correct(img_dir='D:\\WON\\DO_AN\\Changed_data\\49.jpg',gamma=2))
 cv2.waitKey(0)'''
+'''getdata4linReg(data_dir='D:\\WON\\DO_AN\\Changed_data',
+               weights_dir='D:\\WON\\DO_AN\\Code\\Model\\YOLOv3\\yolov3_best.weights',
+               cfg_dir='D:\\WON\\DO_AN\\Code\\Model\\YOLOv3\\yolov3.cfg',
+               names_dir='D:\\WON\\DO_AN\\Code\\Model\\YOLOv3\\obj.names',
+               save_dir='D:\\WON\\DO_AN\\Code\\Quan')'''
