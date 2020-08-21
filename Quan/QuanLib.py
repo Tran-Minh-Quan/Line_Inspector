@@ -3,9 +3,20 @@ import cv2
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+import time
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_absolute_error
 from sklearn.metrics import max_error
+from scipy.signal import butter,filtfilt
+
+def butter_lowpass_filter(data, cutoff, fs, order):
+    nyq = 0.5 * fs
+    normal_cutoff = cutoff / nyq
+    # Get the filter coefficients
+    b, a = butter(order, normal_cutoff, btype='low', analog=False)
+    y = filtfilt(b, a, data,padlen=0)
+    return y
+
 
 #hieu chinh gamma cho mot anh hoac cho folder anh
 def gamma_correct(img_dir='',data_dir='',gamma=1,save_dir=''):
@@ -141,7 +152,7 @@ def getdata4linReg(data_dir='',
             if j in indexes:
                 x, y, w, h = boxes[j]
                 # Lay data cho mang inv_w_array
-                inv_w_array = np.append(inv_w_array, 1 / w)
+                inv_w_array = np.append(inv_w_array, 1/w)
                 # Lay data cho mang dis_array
                 dis_array = np.append(dis_array, [float(i.split('.')[0])])
                 # Luu cac mang duoi dang file .npy
@@ -159,20 +170,28 @@ def getdata4linReg(data_dir='',
 
 def linear_regression(inv_w_array_dir = '',dis_array_dir = ''):
     # Lay du lieu nghich dao do dai box va khoang cach tu file .npy
-    inv_w_array = np.load(inv_w_array_dir).reshape(-1,1)
+    inv_w_array = np.load(inv_w_array_dir)
     dis_array = np.load(dis_array_dir)
-    # Ve du lieu
+    # Ve du lieu truoc khi qua bo loc
     plt.plot(inv_w_array,dis_array, 'o')
+    # Ve du lieu sau khi qua bo loc
+    filtered_inv_w_array = butter_lowpass_filter(data=inv_w_array,cutoff=0.9999,fs=10,order=1)
+    #print(filtered_inv_w_array)
+    plt.plot(filtered_inv_w_array,dis_array,'o')
     # Tao mo hinh hoi quy
     #a, b = np.polyfit(inv_w_array,dis_array,1)
+    inv_w_array = np.reshape(inv_w_array,(-1,1))
     model = LinearRegression().fit(inv_w_array,dis_array)
     a = model.coef_
     b = model.intercept_
     # In ket qua ra man hinh
     print('a = '+str(a)+' b= '+str(b))
     dis_pred_array = a * inv_w_array + b
+    filtered_dis_pred_array = a * filtered_inv_w_array + b
     print('mean absolute error = '+str(mean_absolute_error(dis_array,dis_pred_array)))
     print('max error = '+str(max_error(dis_array,dis_pred_array)))
+    print('mean absolute error after filtered = '+str(mean_absolute_error(dis_array,filtered_dis_pred_array)))
+    print('max error after filtered = '+str(max_error(dis_array,filtered_dis_pred_array)))
     # Ve duong hoi quy
     plt.plot(inv_w_array, dis_pred_array)
     plt.xlabel('1/w')
@@ -184,8 +203,7 @@ def linear_regression(inv_w_array_dir = '',dis_array_dir = ''):
 
 
 
-linear_regression(inv_w_array_dir='D:\\WON\\DO_AN\\Code\\Quan\\inv_w_array.npy',
-                  dis_array_dir='D:\\WON\\DO_AN\\Code\\Quan\\dis_array.npy')
+
 
 '''cv2.imshow("result",gamma_correct(img_dir='D:\\WON\\DO_AN\\Changed_data\\49.jpg',gamma=2))
 cv2.waitKey(0)'''
@@ -193,4 +211,8 @@ cv2.waitKey(0)'''
                weights_dir='D:\\WON\\DO_AN\\Code\\Model\\YOLOv3\\yolov3_best.weights',
                cfg_dir='D:\\WON\\DO_AN\\Code\\Model\\YOLOv3\\yolov3.cfg',
                names_dir='D:\\WON\\DO_AN\\Code\\Model\\YOLOv3\\obj.names',
-               save_dir='D:\\WON\\DO_AN\\Code\\Quan')'''
+               save_dir='D:\\WON\\DO_AN\\Code\\Quan')
+time.sleep(1)'''
+linear_regression(inv_w_array_dir='D:\\WON\\DO_AN\\Code\\Quan\\inv_w_array.npy',
+                  dis_array_dir='D:\\WON\\DO_AN\\Code\\Quan\\dis_array.npy')
+print(butter_lowpass_filter(data=[0,10],cutoff=0.0000001,fs=10,order=1))
