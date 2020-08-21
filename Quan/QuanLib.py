@@ -161,21 +161,23 @@ def linear_regression(inv_w_array_dir = '',dis_array_dir = ''):
     # Lay du lieu nghich dao do dai box va khoang cach tu file .npy
     inv_w_array = np.load(inv_w_array_dir).reshape(-1,1)
     dis_array = np.load(dis_array_dir)
-
+    # Ve du lieu
     plt.plot(inv_w_array,dis_array, 'o')
+    # Tao mo hinh hoi quy
     #a, b = np.polyfit(inv_w_array,dis_array,1)
     model = LinearRegression().fit(inv_w_array,dis_array)
     a = model.coef_
     b = model.intercept_
+    # In ket qua ra man hinh
     print('a = '+str(a)+' b= '+str(b))
     dis_pred_array = a * inv_w_array + b
     print('mean absolute error = '+str(mean_absolute_error(dis_array,dis_pred_array)))
     print('max error = '+str(max_error(dis_array,dis_pred_array)))
+    # Ve duong hoi quy
     plt.plot(inv_w_array, dis_pred_array)
     plt.xlabel('1/w')
     plt.ylabel('Distance (cm)')
     plt.title("Linear regression")
-
     plt.show()
     return
 
