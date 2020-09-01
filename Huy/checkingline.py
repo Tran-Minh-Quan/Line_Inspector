@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+#test git push
 def checkingLine(image,normalValue=40,offset=5):
     term_crit = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 1)
     track_window = (0, 0,image.shape[1], image.shape[0])
