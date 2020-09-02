@@ -21,7 +21,6 @@ def testthreshold(winName='tên của window',cam=1):
   cv2.createTrackbar('ErsKerSize', winName, 5, 20, Trackchanged)
   if isinstance(cam, str):
     cv2.createTrackbar('frame', winName, 8, frameNum, Trackchanged)
-  pre_time = time.time()
   while (True):
 
     THKersize = cv2.getTrackbarPos("THKersize", winName)
