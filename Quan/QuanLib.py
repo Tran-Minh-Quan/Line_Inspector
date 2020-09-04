@@ -258,15 +258,61 @@ def linear_regression(inv_w_array_dir = '',dis_array_dir = ''):
     return
 
 
+# Chú thích cho get_template_tool(...):
+# Chức năng: Lấy template cho thuật toán template matching
+# Thuật toán cho phép xem từng frame của video và chọn ra frame lấy template
+# Điều chỉnh tọa độ khung hình chữ nhật bao quanh template bằng trackbar
+# Ảnh bên trái là frame, ảnh bên phải là template
+# Input: đường dẫn tới video và thư mục lưu template,tên template, ROI
+# ROI = [top_left_x,top_left_y, bottom_right_x, bottom_right_y]
+# Output: template
+def get_template_tool(video_dir, save_dir,template_name, ROI):
+    cap = cv2.VideoCapture(video_dir)
+    frameNum = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    x = np.array([np.arange(frameNum + 1)])
+    y = np.zeros((1, frameNum + 1), np.uint8)
 
-# Lay template cho thuat toan matching template
-# Thuat toan cho phep xem tung frame va chon ra frame lay template
-# Ung voi frame lay template dung chuot de ve
-# Rất mất công
-# Input: duong dan toi file video
-# Output:
+    def Trackchanged(x):
+        pass
+    winName = 'Get template tool'
+    cv2.namedWindow(winName)
+    cv2.createTrackbar('top_left_x', winName, ROI[0], width, Trackchanged)
+    cv2.createTrackbar('bottom_right_x', winName, ROI[2], width, Trackchanged)
+    cv2.createTrackbar('frame', winName, 1, frameNum-1, Trackchanged)
+
+    while (True):
+        # Cập nhật vị trí trackbar
+        top_left_x = cv2.getTrackbarPos('top_left_x', winName)
+        bottom_right_x = cv2.getTrackbarPos('bottom_right_x', winName)
+        frameIndex = cv2.getTrackbarPos('frame', winName)
+
+        cap.set(cv2.CAP_PROP_POS_FRAMES, frameIndex)
+        frame_ok, frame = cap.read()
+        if frame_ok:
+            gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
 
+            blank_img_vsize = (height - (ROI[3]-ROI[1])) // 2
+            blank_img_hsize = bottom_right_x - top_left_x
+            blank_img = np.zeros((blank_img_vsize, blank_img_hsize, 1), np.uint8)
+            blank_img[:] = [220] #chọn màu cho blank_img
+            template = gray_frame[ROI[1]:ROI[3],top_left_x:bottom_right_x].copy()
+            vconcat = cv2.vconcat([blank_img,template,blank_img])
+            cv2.rectangle(gray_frame, (top_left_x, ROI[1]), (bottom_right_x, ROI[3]), (0, 0, 0), 1)
+            display_img = cv2.hconcat([gray_frame, cv2.vconcat([blank_img,template,blank_img])])
+
+            cv2.imshow(winName, display_img)
+            toggle = cv2.waitKey(1)
+            if toggle == ord('s'):
+                cv2.imwrite(save_dir+'\\'+template_name,template)
+                cv2.destroyAllWindows()
+                break
+            if toggle == 27: #esc
+                cv2.destroyAllWindows()
+                break
+    return
 '''cv2.imshow("result",gamma_correct(img_dir='D:\\WON\\DO_AN\\Changed_data\\49.jpg',gamma=2))
 cv2.waitKey(0)'''
 '''getdata4linReg(data_dir='D:\\WON\\DO_AN\\Data\\Distance_estimate',
@@ -285,4 +331,7 @@ print(butter_lowpass_filter(data=[0,10],cutoff=1,fs=10,order=5))'''
     cv2.waitKey(0)
     cv2.imwrite('D:\\WON\\DO_AN\\Cho_thay_xem\\'+image,detected_frame)'''
 
-
+get_template_tool(video_dir='D:\\WON\\DO_AN\\Code\\Huy\\video_test_day.avi',
+                  save_dir='D:\\WON\\DO_AN\\Code\\Huy',
+                  template_name='quan1_template.jpg',
+                  ROI=[220, 75, 420, 95])
