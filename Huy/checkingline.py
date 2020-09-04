@@ -1,10 +1,11 @@
 import cv2
 import numpy as np
+import os
 #test git push
-def checkingLine(image,normalValue=42,offset=6):
+def checkingLine(image,template_dir,normalValue=42,offset=6):
     frame = cv2.cvtColor(image,cv2.COLOR_BGR2GRAY)
     frame1 = frame[75:95, 220:420]
-    template = cv2.imread('template.jpg', 0)
+    template = cv2.imread(template_dir, 0)
     w, h = template.shape[::-1]
     res = cv2.matchTemplate(frame1, template, cv2.TM_CCOEFF)
     min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
@@ -33,32 +34,34 @@ def checkingLine(image,normalValue=42,offset=6):
 
 
 #test hàm checkingLine
-cap=cv2.VideoCapture('video_test_day.avi')
+if __name__ == "__main__":
+    cap=cv2.VideoCapture('video_test_day.avi')
 
-N_bad=[]
-while(True):
-    ok,frame=cap.read()
-    if not ok:
-      break
-    else:
-      checkOk,top_left, bottom_right = checkingLine(image=frame,normalValue=42,offset=6)
-      print(checkOk)
-      if(checkOk==0):
-        cv2.putText(frame, 'Normal', (top_left[0]-130,top_left[1]+20), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0,255,0),2, lineType=cv2.LINE_AA)
-        cv2.rectangle(frame, (top_left[0], top_left[1]), (bottom_right[0], bottom_right[1]), (0,255,0), 2)
-      else:
-        cv2.putText(frame, 'Error', (top_left[0]-130,top_left[1]+20), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0,0,255),2, lineType=cv2.LINE_AA)
-        cv2.rectangle(frame, (top_left[0], top_left[1]), (bottom_right[0], bottom_right[1]), (0,0,255), 2)
-        N_bad.append(checkOk)
-    cv2.imshow('result',frame)
-    cv2.waitKey(50)
-    k = cv2.waitKey(5) & 0xff
-    if (k == 27):
-      break
-    elif (k==115):
-      start=1
-cap.release()
-cv2.destroyAllWindows()
+    N_bad=[]
+    while(True):
+        ok,frame=cap.read()
+        if not ok:
+          break
+        else:
+          checkOk,top_left, bottom_right = checkingLine(image=frame,template_dir='template.jpg',normalValue=42,offset=6)
+          #print(checkOk)
+          if(checkOk==0):
+            cv2.putText(frame, 'Normal', (top_left[0]-130,top_left[1]+20), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0,255,0),2, lineType=cv2.LINE_AA)
+            cv2.rectangle(frame, (top_left[0], top_left[1]), (bottom_right[0], bottom_right[1]), (0,255,0), 2)
+          else:
+            cv2.putText(frame, 'Error', (top_left[0]-130,top_left[1]+20), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0,0,255),2, lineType=cv2.LINE_AA)
+            cv2.rectangle(frame, (top_left[0], top_left[1]), (bottom_right[0], bottom_right[1]), (0,0,255), 2)
+            N_bad.append(checkOk)
+        cv2.imshow('result',frame)
+        k = cv2.waitKey(50) & 0xff
+        if (k == 27):
+          break
+        elif (k==115):
+          start=1
+    cap.release()
+    cv2.destroyAllWindows()
+
+
 
 
 
