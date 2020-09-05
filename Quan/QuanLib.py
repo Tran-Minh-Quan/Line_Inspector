@@ -10,51 +10,65 @@ from sklearn.metrics import mean_squared_error
 from sklearn.metrics import max_error
 from scipy.signal import butter,filtfilt
 
-def yolov3_detect(frame):
-    #Load yolo
-    net = cv2.dnn.readNetFromDarknet("D:\\WON\\DO_AN\\Code\\Model\\YOLOv3\\yolov3.cfg", "D:\\WON\\DO_AN\\Code\\Model\\YOLOv3\\yolov3_best.weights")
-    net.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
-    net.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
-    classes = []
-    with open("D:\\WON\\DO_AN\\Code\\Model\\YOLOv3\\obj.names", "r") as f:
-        classes = [line.strip() for line in f.readlines()]
-    layer_names = net.getLayerNames()
-    output_layers = [layer_names[i[0] - 1] for i in net.getUnconnectedOutLayers()]
 
-    #Input to yolo
-    height, width, channels = frame.shape
-    # Input blob thay vi frame de giam anh huong cua anh sang
-    blob = cv2.dnn.blobFromImage(frame, 1 / 255, (416, 416), (0, 0, 0), True, crop=False)
-    net.setInput(blob)
-    outs = net.forward(output_layers)
-    # hien_man_hinh
-    detector_idxs = []
-    confidences = []
-    boxes = []
-    for o in outs:
-        for detection in o:
-            scores = detection[5:]
-            class_id = np.argmax(scores)
-            confidence = scores[class_id]
-            if confidence > 0:
-                top_left_x = round((detection[0] - detection[2] /2) * width)  # top left x = center_x - width
-                top_left_y = round((detection[1] - detection[3] /2) * height)  # top left y = center_y - height
-                bottom_right_x = round((detection[0] + detection[2] /2) * width)  # bottom right x = center_x + width
-                bottom_right_y = round((detection[1] + detection[3] /2) * height)  # bottom right y = center_y + height
-                boxes.append([top_left_x,top_left_y,bottom_right_x,bottom_right_y])
-                confidences.append(float(confidence))
-                detector_idxs.append(class_id)
-    indexes = cv2.dnn.NMSBoxes(boxes, confidences, 0, 0.4)
+# Class bao gồm những lệnh liên quan yolov3
+class Yolov3:
+    def __init__(self, cfg_dir, weights_dir, names_dir):
+        self.cfg_dir = cfg_dir
+        self.weights_dir = weights_dir
+        self.names_dir = names_dir
+        self.net = cv2.dnn.readNetFromDarknet(self.cfg_dir,self.weights_dir)
+        self.net.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
+        self.net.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
+        self.classes = []
+        with open(names_dir, "r") as f:
+            self.classes = [line.strip() for line in f.readlines()]
+        self.layer_names = self.net.getLayerNames()
+        self.output_layers = [self.layer_names[i[0] - 1] for i in self.net.getUnconnectedOutLayers()]
 
-    for i in indexes:
-        i = i[0]
-        top_left_x, top_left_y, bottom_right_x, bottom_right_y = boxes[i]
-        cv2.rectangle(frame, (top_left_x, top_left_y), (bottom_right_x, bottom_right_y), (0, 250, 0), 2)
-        cv2.putText(frame, str(detector_idxs[i]) + '  ' + str(np.round(confidences[i] * 100, 2)) + '%', (top_left_x, top_left_y),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (250, 0, 0), 1, lineType=cv2.LINE_AA)
-        #cv2.imshow('frame',frame)
-        #cv2.waitKey(0)
-    return frame
+    def detect(self,frame):
+        frame_height, frame_width, frame_channels = frame.shape
+        # Input blob thay vi frame de giam anh huong cua anh sang
+        blob = cv2.dnn.blobFromImage(frame, 1 / 255, (416, 416), (0, 0, 0), True, crop=False)
+        self.net.setInput(blob)
+        outs = self.net.forward(self.output_layers)
+        # hien_man_hinh
+        detector_idxs = []
+        confidences = []
+        boxes = []
+        for o in outs:
+            for detection in o:
+                scores = detection[5:]
+                class_id = np.argmax(scores)
+                confidence = scores[class_id]
+                if confidence > 0:
+                    top_left_x = round((detection[0] - detection[2] / 2) * frame_width)  # top left x = center_x - width
+                    top_left_y = round((detection[1] - detection[3] / 2) * frame_height)  # top left y = center_y - height
+                    bottom_right_x = round((detection[0] + detection[2] / 2) * frame_width)  # bottom right x = center_x + width
+                    bottom_right_y = round((detection[1] + detection[3] / 2) * frame_height)  # bottom right y = center_y + height
+                    boxes.append([top_left_x, top_left_y, bottom_right_x, bottom_right_y])
+                    confidences.append(float(confidence))
+                    detector_idxs.append(class_id)
+        indexes = cv2.dnn.NMSBoxes(boxes, confidences, 0, 0.4)
+
+        self.box_width = None
+        self.top_left_x = None
+        self.top_left_y = None
+        self.bottom_right_x = None
+        self.bottom_right_y = None
+        for i in indexes:
+            i = i[0]
+            self.top_left_x, self.top_left_y, self.bottom_right_x, self.bottom_right_y = boxes[i]
+            self.box_width = self.bottom_right_x - self.top_left_x
+            self.index = detector_idxs[i]
+            self.confidence = confidences[i]
+            '''cv2.rectangle(frame, (self.top_left_x, self.top_left_y), (self.bottom_right_x, self.bottom_right_y), (0, 250, 0), 2)
+            cv2.putText(frame, str(self.index) + '  ' + str(np.round(self.confidence * 100, 2)) + '%',
+                        (self.top_left_x, self.top_left_y),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (250, 0, 0), 1, lineType=cv2.LINE_AA)'''
+            # cv2.imshow('frame',frame)
+            # cv2.waitKey(0)
+
 
 
 
@@ -313,6 +327,9 @@ def get_template_tool(video_dir, save_dir,template_name, ROI):
                 cv2.destroyAllWindows()
                 break
     return
+
+
+
 '''cv2.imshow("result",gamma_correct(img_dir='D:\\WON\\DO_AN\\Changed_data\\49.jpg',gamma=2))
 cv2.waitKey(0)'''
 '''getdata4linReg(data_dir='D:\\WON\\DO_AN\\Data\\Distance_estimate',
@@ -331,7 +348,8 @@ print(butter_lowpass_filter(data=[0,10],cutoff=1,fs=10,order=5))'''
     cv2.waitKey(0)
     cv2.imwrite('D:\\WON\\DO_AN\\Cho_thay_xem\\'+image,detected_frame)'''
 
-get_template_tool(video_dir='D:\\WON\\DO_AN\\Code\\Huy\\video_test_day.avi',
+'''get_template_tool(video_dir='D:\\WON\\DO_AN\\Code\\Huy\\video_test_day.avi',
                   save_dir='D:\\WON\\DO_AN\\Code\\Huy',
                   template_name='quan1_template.jpg',
-                  ROI=[220, 75, 420, 95])
+                  ROI=[220, 75, 420, 95])'''
+
