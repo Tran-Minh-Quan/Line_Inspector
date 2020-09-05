@@ -56,11 +56,15 @@ class Yolov3:
         self.top_left_y = None
         self.bottom_right_x = None
         self.bottom_right_y = None
+        #self.index = None
+        self.name = '?    '
+        self.confidence = 0
         for i in indexes:
             i = i[0]
             self.top_left_x, self.top_left_y, self.bottom_right_x, self.bottom_right_y = boxes[i]
             self.box_width = self.bottom_right_x - self.top_left_x
-            self.index = detector_idxs[i]
+            #self.index = detector_idxs[i]
+            self.name = self.classes[detector_idxs[i]]
             self.confidence = confidences[i]
             '''cv2.rectangle(frame, (self.top_left_x, self.top_left_y), (self.bottom_right_x, self.bottom_right_y), (0, 250, 0), 2)
             cv2.putText(frame, str(self.index) + '  ' + str(np.round(self.confidence * 100, 2)) + '%',
@@ -70,15 +74,17 @@ class Yolov3:
             # cv2.waitKey(0)
 
 
-
-
-def butter_lowpass_filter(data, cutoff, fs, order):
-    nyq = 0.5 * fs
-    normal_cutoff = cutoff / nyq
-    # Get the filter coefficients
-    b, a = butter(order, normal_cutoff, btype='low', analog=False)
-    y = filtfilt(b, a, data,padlen=0)
-    return y
+class butter_lowpass_filter:
+    def __init__(self, order, cutoff, fs):
+        self.order = order
+        self.cutoff = cutoff
+        self.fs =fs
+        self.nyq = 0.5 * self.fs
+        self.normal_cutoff = self.cutoff / self.nyq
+        # Get the filter coefficients
+        self.b, self.a = butter(self.order, self.normal_cutoff, btype='low', analog=False)
+    def output(self,data):
+        return filtfilt(self.b, self.a, data, padlen=0)
 
 
 #hieu chinh gamma cho mot anh hoac cho folder anh

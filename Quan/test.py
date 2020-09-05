@@ -1,6 +1,6 @@
 import os
 import cv2
-import Sahelpers as Sa
+import anhSang.Sahelpers as Sa
 def continuous_check(check_folder_path = 'D:/WON/DO_AN/Code/Code_Sa/test/ball/Image/'):
   filelist = []
   number_string = ''
@@ -40,7 +40,7 @@ def combine_to_one_screen(vid1='',vid2=''):
 #continuous_check(check_folder_path = 'D:/WON/DO_AN/Code/Code_Sa/test/Label/')
 #Sa.folder_rename(rename_folder_path = 'D:/WON/DO_AN/Training/data/insulator/Label/',extension = '.txt',new_name = '3_insulator_',begin_index = 1)
 #combine_to_one_screen('VIDEO1_svm.avi','VIDEO1_yolo.avi')
-'''
+
 import cv2
 import numpy as np
 from matplotlib import pyplot as plt
@@ -89,4 +89,3 @@ def tachday(cam) :
   # Closes all the frames
  cv2.destroyAllWindows()
 tachday('video2.avi')
-'''

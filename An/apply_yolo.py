@@ -10,6 +10,7 @@ import random
 import matplotlib.pyplot as plt
 import xml.etree.ElementTree as ET
 from Tho import Distance_functions as Tho
+from Quan import QuanLib
 
 def pyramid(image, scale=1, minSize=(30, 30)):
   while True:
@@ -55,13 +56,16 @@ def Demo(scaleim, cam, vector_w, normalValue=40, offset=5):
         classes = [line.strip() for line in f.readlines()]
     layer_names = net.getLayerNames()
     output_layers = [layer_names[i[0] - 1] for i in net.getUnconnectedOutLayers()]
+
     # tai anh/video
     start = time.time()
     cap = cv2.VideoCapture(cam)
 
     frame_id = 0
+    inv_w_array = [0, 0, 0, 0, 0, 0]
     while True:
         ok, frame = cap.read()
+        #frame = QuanLib.gamma_correct()
         frame_id += 1
         if not ok:
             break
@@ -103,6 +107,7 @@ def Demo(scaleim, cam, vector_w, normalValue=40, offset=5):
         y=0
         w=0
         h=0
+
         for i in range(len(boxes)):
 
             if i in indexes:
@@ -158,12 +163,17 @@ def Demo(scaleim, cam, vector_w, normalValue=40, offset=5):
             NameOb = 'Nothing'
 
         #Phan cua Tho
-        top_left = [x,y]
+        '''top_left = [x,y]
         bottom_right = [x+w,y+h]
         Distance, contour, _ = Tho.distance_estimate(frame.copy(), top_left, bottom_right, 0.2, 200, 400, 14.7)
         Distance = Distance / 10
-        cv2.imshow('contour', contour.copy())
-
+        cv2.imshow('contour', contour.copy())'''
+        a = 4132.45382956
+        b = 2.4475897335913714
+        if w != 0:
+            inv_w_array = inv_w_array[1:6]+[1/w]
+            #print(inv_w_array)
+        Distance = a * QuanLib.butter_lowpass_filter(data=inv_w_array,cutoff=0.7,fs=10,order=2)[5] + b
 
         '''
         if top_left == [0,0] or bottom_right == [0,0]:
@@ -181,7 +191,7 @@ def Demo(scaleim, cam, vector_w, normalValue=40, offset=5):
         end = time.time()
         cv2.putText(img, 'FPS:' + str(
             np.round(1 / (end - start))) + '   Name:' + NameOb + '     Distance:' + dis_string + '  cm', (20, 20),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1, lineType=cv2.LINE_AA)
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 1, lineType=cv2.LINE_AA)
         start = time.time()
 
         frame1 = frame[75:95, 220:420].copy()
