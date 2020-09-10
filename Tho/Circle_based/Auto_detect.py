@@ -18,7 +18,7 @@ gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
 cv2.namedWindow('Window 1')
 Canny_low = 300
 Canny_high = 600
-Canny_step = 10
+Canny_step = 5
 Canny_param = Canny_high
 start_time = time.time()
 while True:
@@ -38,7 +38,7 @@ while True:
             stop_time = time.time()
             print("{}".format(stop_time - start_time))
             print("R = {} pixel".format(circles[0][0][2]))
-            # break
+            break
     else:
         if Canny_param >= Canny_low + Canny_step:
             Canny_param -= Canny_step
