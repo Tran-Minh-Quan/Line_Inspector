@@ -8,8 +8,8 @@ def nothing():
     pass
 
 
-# Example usage: python3 Detect_circle.py --image ./Changed_data/20.jpg
-# For Pycharm: Edit Configuration -> Parameters -> --image ./Changed_data/20.jpg
+# Example usage: python3 Detect_circle.py --image ./Changed_data/30.jpg
+# For Pycharm: Edit Configuration -> Parameters -> --image ./Changed_data/30.jpg
 ap = argparse.ArgumentParser()
 ap.add_argument("-i", "--image", required=True, help="Path to image")
 args = vars(ap.parse_args())
