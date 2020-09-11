@@ -1,5 +1,5 @@
 import cv2
-from Module_developing import CircleDistance
+from distance_calc import CircleDistance
 import time
 import numpy as np
 
