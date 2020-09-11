@@ -4,22 +4,28 @@ import imutils
 import math
 
 
-def calculate_distance(object_width, focal_length, width_pixel):
-    distance = int((10 * (focal_length * object_width) / width_pixel) + 0.5)
-    return distance
-
-
+''' CircleDistance module:
+    For initialize: 
+    1. This module should be initialize before using, recommended params for Canny and Hough respectively is (200, 456) and 30.
+    2. Slope and intercept should be calculated in advanced.
+    For using calculate function:
+    1. Argument mode can be set to 0 (not using circle detection) or 1 (using circle detection), default is 1.
+    2. Extended_ratio should varies between 0.2 - 0.5 for best result.
+    About returning output:
+    1. Distance will be set to -1 if an error occurred.
+    2. Return image will highlight detected circle and its center.
+    3. Error return can be 0,1,2 (NO_ERROR, INVALID_INPUT_ERROR, NON_CIRCLE_ERROR).
+'''
 class CircleDistance:
     def __init__(self, low_canny, high_canny, hough_param, slope, intercept):
         self.NO_ERROR = 0
         self.INVALID_INPUT_ERROR = 1
-        self.NON_CIRCLE_ERROR = 2
+        self.NON_CIRCLE_ERROR = 2   # Circle undetectable
         self.low_canny = low_canny
         self.high_canny = high_canny
-        self.slope = slope
-        self.intercept = intercept
-        self.hough_param = hough_param
-        # self.img = np.empty([300, 300, 3])
+        self.slope = slope  # Slope of linear regression distance estimate function
+        self.intercept = intercept  # Intercept of linear regression distance estimate function
+        self.hough_param = hough_param  # This value should varies between 20-70 (30 is best for some cases)
 
     def calculate(self, img, top_left, bot_right, extended_ratio, **kwargs):
         rm_left = self.low_canny
@@ -27,9 +33,12 @@ class CircleDistance:
         img_out = img.copy()
         width_box = bot_right[1] - top_left[1]
         height_box = bot_right[0] - top_left[0]
+        # Check for invalid input
         if width_box <= 0 or height_box <= 0 \
                 or max(bot_right[0], top_left[0]) > img.shape[0] or max(bot_right[1], top_left[1]) > img.shape[1]:
             return [-1, img_out, self.INVALID_INPUT_ERROR]
+        # mode = 0 when not using circle detection
+        # mode = 1 when using circle detection (default)
         if "mode" in kwargs:
             if kwargs['mode'] == 0:
                 if 'object_width' in kwargs:
@@ -50,8 +59,11 @@ class CircleDistance:
         # Calculate y axis extended
         y_axis_extended = [max(0, int(top_left[0] - extended_ratio * height_box)),
                            min(img.shape[1], int(bot_right[0] + extended_ratio * height_box))]
+        # Crop image
         crop_img = img[x_axis_extended[0]: x_axis_extended[1], y_axis_extended[0]:y_axis_extended[1]]
+        # Grayscale image
         gray_img = cv2.cvtColor(crop_img, cv2.COLOR_RGB2GRAY)
+        # Binary search algorithm to find LEFTMOST Canny parameter
         while rm_left < rm_right:
             canny_param = math.floor((rm_right + rm_left) / 2)
             circles = cv2.HoughCircles(gray_img, cv2.HOUGH_GRADIENT, 1, 100,
@@ -61,21 +73,36 @@ class CircleDistance:
             else:
                 rm_left = canny_param + 1
         canny_param = rm_left - 1
+        # Detect circle with determined Canny parameter
         circles = cv2.HoughCircles(gray_img, cv2.HOUGH_GRADIENT, 1, 100,
                                    param1=canny_param, param2=self.hough_param, minRadius=0, maxRadius=0)
+        # Return error if circle is undetectable
         if circles is None:
             return [-1, img_out, self.NON_CIRCLE_ERROR]
         circles_round = np.round(circles[0, :]).astype("int")
+        # Mark detected circle in image
         for (x, y, r) in circles_round:
             cv2.circle(img_out, (x + x_axis_extended[0], y + y_axis_extended[0]), r, (0, 255, 0), 4)
             cv2.rectangle(img_out, (x - 5 + x_axis_extended[0], y - 5 + y_axis_extended[0]),
                           (x + 5 + x_axis_extended[0], y + 5 + y_axis_extended[0]), (0, 128, 255), -1)
         radius_pixel = circles[0][0][2]
+        # Calculate distance with linear regression function
         distance = self.slope * 1/radius_pixel + self.intercept
         return [distance, img_out, self.NO_ERROR]
 
 
-def edge_based(img, start_point, end_point, extended_ratio, canny_var_1, canny_var_2, object_width):
+''' This is a simple distance estimate formula with known width object'''
+def calculate_distance(object_width, focal_length, width_pixel):
+    distance = int((10 * (focal_length * object_width) / width_pixel) + 0.5)
+    return distance
+
+
+''' edge_based module:
+    1. This module calculate distance to object with known width, only works well when the background is flat.
+    2. Error return can be 0,1 (NO_ERROR, ERROR_DETECTED).
+    3. Focal length and object width should be measured in advanced.
+'''
+def edge_based(img, start_point, end_point, extended_ratio, canny_var_1, canny_var_2, focal_length, object_width):
     kernel = np.ones((5, 5), np.uint8)  # Init kernel for erosion operation
     width_box = end_point[1] - start_point[1]   # Calculate width of bounding box
     height_box = end_point[0] - start_point[0]  # Calculate height of bounding box
@@ -106,7 +133,7 @@ def edge_based(img, start_point, end_point, extended_ratio, canny_var_1, canny_v
         try:
             if ext_right - ext_left == 0:
                 return [-1, img, 1]
-            distance = calculate_distance(object_width, 764, ext_right - ext_left)     # Calculate distance
+            distance = calculate_distance(object_width, focal_length, ext_right - ext_left)     # Calculate distance
             # Draw contour for further troubleshooting
             img_1 = cv2.drawContours(crop_img.copy(), contours, -1, (0, 0, 255), 3)
             # Draw rectangle used for distance estimation
