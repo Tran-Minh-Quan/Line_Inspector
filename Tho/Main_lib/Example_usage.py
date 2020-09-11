@@ -3,9 +3,10 @@ from distance_calc import CircleDistance
 import time
 import numpy as np
 
-img = cv2.imread("./Changed_data/22.jpg")
-# img = cv2.morphologyEx(img_read, cv2.MORPH_OPEN, np.ones((5, 5), np.uint8))
-Circle_based_estimate_1 = CircleDistance(200, 456, 30, 867.7887424687945, -0.18242145320198588)
+img = cv2.imread("./Changed_data/57.jpg")
+# Canny_low = 200, Canny_high = 600, step_size = 5, hough_param =22,
+# slope = 867.7887424687945, intercept = -0.18242145320198588
+Circle_based_estimate_1 = CircleDistance(200, 600, 5, 22, 867.7887424687945, -0.18242145320198588)
 time_start = time.time()
 distance, img_out, error = Circle_based_estimate_1.calculate(img, (100, 100), (400, 400),
                                                              0.2, mode=1, object_width=10)
