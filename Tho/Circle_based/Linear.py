@@ -7,4 +7,6 @@ my_x = np.array([1/42.2000007629395, 1/43.0999984741211, 1/36.9000015258789, 1/3
 slope, intercept, r_value, p_value, std_err = stats.linregress(my_x, my_y)
 prediction = my_x * slope + intercept
 std_err = sum(abs(my_y - prediction))/len(my_y)
+print(slope)
+print(intercept)
 print(std_err)
