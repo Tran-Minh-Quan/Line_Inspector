@@ -4,6 +4,11 @@ import imutils
 import math
 
 
+def calculate_distance(object_width, focal_length, width_pixel):
+    distance = int((10 * (focal_length * object_width) / width_pixel) + 0.5)
+    return distance
+
+
 class CircleDistance:
     def __init__(self, low_canny, high_canny, hough_param, slope, intercept):
         self.NO_ERROR = 0
@@ -70,32 +75,7 @@ class CircleDistance:
         return [distance, img_out, self.NO_ERROR]
 
 
-
-
-                # Crop image
-               #crop_img = img[x_axis_extended[0]: x_axis_extended[1], y_axis_extended[0]:y_axis_extended[1]]
-
-#               crop_img = img[max(0, int(top_left[1])): min(img.shape[0], int(bot_right[1])),
-#                                    max(0, int(top_left[0])): min(img.shape[1], int(bot_right[0]))]
-
-#         x_axis_extended = [max(0, int(top_left[1] - extended_ratio * width_box)),
-#                            min(img.shape[0], int(bot_right[1] + extended_ratio * width_box))]
-#         # Calculate y axis extended
-#         y_axis_extended = [max(0, int(top_left[0] - extended_ratio * height_box)),
-#                            min(img.shape[1], int(bot_right[0] + extended_ratio * height_box))]
-
-
-
-
-def calculate_distance(object_width, focal_length, width_pixel):
-    distance = int((10 * (focal_length * object_width) / width_pixel) + 0.5)
-    return distance
-
-
-
-
-
-def distance_estimate(img, start_point, end_point, extended_ratio, canny_var_1, canny_var_2, object_width):
+def edge_based(img, start_point, end_point, extended_ratio, canny_var_1, canny_var_2, object_width):
     kernel = np.ones((5, 5), np.uint8)  # Init kernel for erosion operation
     width_box = end_point[1] - start_point[1]   # Calculate width of bounding box
     height_box = end_point[0] - start_point[0]  # Calculate height of bounding box
@@ -137,5 +117,4 @@ def distance_estimate(img, start_point, end_point, extended_ratio, canny_var_1, 
             error = 1
     else:
         return [-1, crop_img, 1]
-
     return [distance, img_out, error]
