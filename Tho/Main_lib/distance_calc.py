@@ -21,6 +21,7 @@ class CircleDistance:
         self.NO_ERROR = 0
         self.INVALID_INPUT_ERROR = 1
         self.NON_CIRCLE_ERROR = 2   # Circle undetectable
+        self.MULTIPLE_CIRCLES_ERROR = 3
         self.low_canny = low_canny
         self.high_canny = high_canny
         self.step_size = step_size
@@ -62,6 +63,7 @@ class CircleDistance:
                            min(img.shape[1], int(bot_right[0] + extended_ratio * height_box))]
         # Crop image
         crop_img = img[x_axis_extended[0]: x_axis_extended[1], y_axis_extended[0]:y_axis_extended[1]]
+        # cv2.imwrite("img_test.jpg", crop_img)
         # Grayscale image
         gray_img = cv2.cvtColor(crop_img, cv2.COLOR_RGB2GRAY)
         # Binary search algorithm to find LEFTMOST Canny parameter
@@ -82,10 +84,14 @@ class CircleDistance:
             return [-1, img_out, self.NON_CIRCLE_ERROR]
         circles_round = np.round(circles[0, :]).astype("int")
         # Mark detected circle in image
-        for (x, y, r) in circles_round:
-            cv2.circle(img_out, (x + x_axis_extended[0], y + y_axis_extended[0]), r, (0, 255, 0), 4)
-            cv2.rectangle(img_out, (x - 5 + x_axis_extended[0], y - 5 + y_axis_extended[0]),
-                          (x + 5 + x_axis_extended[0], y + 5 + y_axis_extended[0]), (0, 128, 255), -1)
+        for (y, x, r) in circles_round:
+            cv2.circle(img_out, (y + y_axis_extended[0], x + x_axis_extended[0]), r, (0, 255, 0), 4)
+            cv2.rectangle(img_out, (y - 5 + y_axis_extended[0], x - 5 + x_axis_extended[0]),
+                          (y + 5 + y_axis_extended[0], x + 5 + x_axis_extended[0]), (0, 128, 255), -1)
+            cv2.rectangle(img_out, (y_axis_extended[0], x_axis_extended[0]), (y_axis_extended[1], x_axis_extended[1]),
+                          (255, 0, 0), 2)
+        if circles.shape[1] > 1:
+            return [-1, img_out, self.MULTIPLE_CIRCLES_ERROR]
         radius_pixel = circles[0][0][2]
         # Calculate distance with linear regression function
         distance = self.slope * 1/radius_pixel + self.intercept
