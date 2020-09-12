@@ -17,7 +17,7 @@ distance_2, img_out_2, error_2 = Circle_based_estimate_1.calculate(img, (100, 20
                                                              0.2, mode=1, object_width=10)
 time_stop_2 = time.time()
 img = cv2.imread("./Changed_data/28.jpg")
-distance_3, img_out_3, error_3 = Circle_based_estimate_1.calculate(img, (100, 200), (300, 400),
+distance_3, img_out_3, error_3 = Circle_based_estimate_1.calculate(img, (200, 300), (400, 500),
                                                              0.2, mode=1, object_width=10)
 time_stop_3 = time.time()
 
