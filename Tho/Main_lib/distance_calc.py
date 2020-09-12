@@ -15,7 +15,8 @@ import math
     About returning output:
     1. Distance will be set to -1 if an error occurred.
     2. Return image will highlight detected circle and its center.
-    3. Error return can be 0,1,2 (NO_ERROR, INVALID_INPUT_ERROR, NON_CIRCLE_ERROR).
+    3. Error return can be: 
+    0,1,2 (NO_ERROR, INVALID_INPUT_ERROR, NON_CIRCLE_ERROR).
 '''
 
 
@@ -59,13 +60,15 @@ class CircleDistance:
         else:
             pass
         # Calculate x axis extended
-        x_axis_extended = [max(0, int(top_left[1] - extended_ratio * width_box)),
-                           min(img.shape[0], int(bot_right[1] + extended_ratio * width_box))]
+        x_axis_extended = [max(0, int(top_left[0] - extended_ratio * width_box)),
+                           min(img.shape[0], int(bot_right[0] + extended_ratio * width_box))]
         # Calculate y axis extended
-        y_axis_extended = [max(0, int(top_left[0] - extended_ratio * height_box)),
-                           min(img.shape[1], int(bot_right[0] + extended_ratio * height_box))]
+        y_axis_extended = [max(0, int(top_left[1] - extended_ratio * height_box)),
+                           min(img.shape[1], int(bot_right[1] + extended_ratio * height_box))]
         # Crop image
         crop_img = img[x_axis_extended[0]: x_axis_extended[1], y_axis_extended[0]:y_axis_extended[1]]
+        cv2.rectangle(img_out, (y_axis_extended[0], x_axis_extended[0]), (y_axis_extended[1], x_axis_extended[1]),
+                      (255, 0, 0), 2)
         # cv2.imwrite("img_test.jpg", crop_img)
         # Grayscale image
         gray_img = cv2.cvtColor(crop_img, cv2.COLOR_RGB2GRAY)
@@ -75,8 +78,8 @@ class CircleDistance:
             rm_right = self.high_canny
             pass
         else:
-            rm_left = self.last_canny_param - 100
-            rm_right = self.last_canny_param + 100
+            rm_left = self.last_canny_param - 60
+            rm_right = self.last_canny_param + 60
         canny_param = rightmost_canny_param_search(gray_img, rm_left, rm_right,
                                                    self.step_size, self.hough_param)
         # Detect circle with determined Canny parameter
@@ -92,8 +95,6 @@ class CircleDistance:
             cv2.circle(img_out, (y + y_axis_extended[0], x + x_axis_extended[0]), r, (0, 255, 0), 4)
             cv2.rectangle(img_out, (y - 5 + y_axis_extended[0], x - 5 + x_axis_extended[0]),
                           (y + 5 + y_axis_extended[0], x + 5 + x_axis_extended[0]), (0, 128, 255), -1)
-            cv2.rectangle(img_out, (y_axis_extended[0], x_axis_extended[0]), (y_axis_extended[1], x_axis_extended[1]),
-                          (255, 0, 0), 2)
         if circles.shape[1] > 1:
             self.first_detect == 1
             return [-1, img_out, self.MULTIPLE_CIRCLES_ERROR]
