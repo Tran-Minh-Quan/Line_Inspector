@@ -69,7 +69,7 @@ class CircleDistance:
         # cv2.imwrite("img_test.jpg", crop_img)
         # Grayscale image
         gray_img = cv2.cvtColor(crop_img, cv2.COLOR_RGB2GRAY)
-        # Binary search algorithm to find LEFTMOST Canny parameter
+        # Binary search algorithm to find RIGHTMOST Canny parameter
         if self.first_detect == 1:
             rm_left = self.low_canny
             rm_right = self.high_canny
@@ -77,18 +77,8 @@ class CircleDistance:
         else:
             rm_left = self.last_canny_param - 100
             rm_right = self.last_canny_param + 100
-        step = 0
-        while rm_left < rm_right:
-            step += 1
-            canny_param = math.floor((rm_right + rm_left) / (2*self.step_size))*self.step_size
-            circles = cv2.HoughCircles(gray_img, cv2.HOUGH_GRADIENT, 1, 100,
-                                       param1=canny_param, param2=self.hough_param, minRadius=0, maxRadius=0)
-            if circles is None:
-                rm_right = canny_param
-            else:
-                rm_left = canny_param + self.step_size
-        print("Iteration step taken: %d" % step)
-        canny_param = rm_left - self.step_size
+        canny_param = rightmost_canny_param_search(gray_img, rm_left, rm_right,
+                                                   self.step_size, self.hough_param)
         # Detect circle with determined Canny parameter
         circles = cv2.HoughCircles(gray_img, cv2.HOUGH_GRADIENT, 1, 100,
                                    param1=canny_param, param2=self.hough_param, minRadius=0, maxRadius=0)
@@ -116,9 +106,26 @@ class CircleDistance:
 
 
 ''' This is a simple distance estimate formula with known width object'''
+
+
 def calculate_distance(object_width, focal_length, width_pixel):
     distance = int((10 * (focal_length * object_width) / width_pixel) + 0.5)
     return distance
+
+
+def rightmost_canny_param_search(gray_img, rm_left, rm_right, step_size, hough_param):
+    step = 0
+    while rm_left < rm_right:
+        step += 1
+        canny_param = math.floor((rm_right + rm_left) / (2 * step_size)) * step_size
+        circles = cv2.HoughCircles(gray_img, cv2.HOUGH_GRADIENT, 1, 100,
+                                   param1=canny_param, param2=hough_param, minRadius=0, maxRadius=0)
+        if circles is None:
+            rm_right = canny_param
+        else:
+            rm_left = canny_param + step_size
+    print("Iteration step taken: %d" % step)
+    return rm_left - step_size
 
 
 ''' edge_based module:
@@ -126,6 +133,8 @@ def calculate_distance(object_width, focal_length, width_pixel):
     2. Error return can be 0,1 (NO_ERROR, ERROR_DETECTED).
     3. Focal length and object width should be measured in advanced.
 '''
+
+
 def edge_based(img, start_point, end_point, extended_ratio, canny_var_1, canny_var_2, focal_length, object_width):
     kernel = np.ones((5, 5), np.uint8)  # Init kernel for erosion operation
     width_box = end_point[1] - start_point[1]   # Calculate width of bounding box
