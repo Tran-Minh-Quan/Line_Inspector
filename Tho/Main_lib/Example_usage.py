@@ -9,16 +9,20 @@ Circle_based_estimate_1 = CircleDistance(50, 5000, 1, 22, 867.7887424687945, -0.
 time_start = time.time()
 img = cv2.imread("./Changed_data/25.jpg")
 distance_1, img_out_1, error_1 = Circle_based_estimate_1.calculate(img, (100, 200), (300, 400),
-                                                             0.2, mode=1, object_width=10)
+                                                                   0.2, mode=1, object_width=10)
 time_stop_1 = time.time()
 img = cv2.imread("./Changed_data/26.jpg")
 distance_2, img_out_2, error_2 = Circle_based_estimate_1.calculate(img, (100, 200), (300, 400),
-                                                             0.2, mode=1, object_width=10)
+                                                                   0.2, mode=1, object_width=10)
 time_stop_2 = time.time()
-img = cv2.imread("./Changed_data/test_2.jpg")
-Circle_based_estimate_1.first_detect = 1
-distance_3, img_out_3, error_3 = Circle_based_estimate_1.calculate(img, (50, 300), (210, 550),
-                                                             0.1, mode=1, object_width=10)
+img = cv2.imread("./Changed_data/28.jpg")
+distance_3, img_out_3, error_3 = Circle_based_estimate_1.calculate(img, (100, 200), (300, 400),
+                                                             0.2, mode=1, object_width=10)
+# time_stop_2 = time.time()
+# img = cv2.imread("./Changed_data/test_2.jpg")
+# Circle_based_estimate_1.first_detect = 1
+# distance_3, img_out_3, error_3 = Circle_based_estimate_1.calculate(img, (50, 300), (210, 550),
+#                                                              0.1, mode=1, object_width=10)
 time_stop_3 = time.time()
 cv2.imwrite("img_test.jpg", img_out_3)
 
