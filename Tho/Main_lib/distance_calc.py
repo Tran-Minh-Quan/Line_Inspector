@@ -6,7 +6,8 @@ import math
 
 ''' CircleDistance module:
     For initialize: 
-    1. This module should be initialize before using, recommended params for Canny and Hough respectively is (200, 456) and 30.
+    1. This module should be initialize before using, recommended params for Canny and Hough respectively 
+    is (200, 456) and 30.
     2. Slope and intercept should be calculated in advanced.
     For using calculate function:
     1. Argument mode can be set to 0 (not using circle detection) or 1 (using circle detection), default is 1.
@@ -16,6 +17,8 @@ import math
     2. Return image will highlight detected circle and its center.
     3. Error return can be 0,1,2 (NO_ERROR, INVALID_INPUT_ERROR, NON_CIRCLE_ERROR).
 '''
+
+
 class CircleDistance:
     def __init__(self, low_canny, high_canny, step_size, hough_param, slope, intercept):
         self.NO_ERROR = 0
@@ -28,10 +31,10 @@ class CircleDistance:
         self.slope = slope  # Slope of linear regression distance estimate function
         self.intercept = intercept  # Intercept of linear regression distance estimate function
         self.hough_param = hough_param  # This value should varies between 20-70 (30 is best for some cases)
+        self.first_detect = 1
+        self.last_canny_param = 450
 
     def calculate(self, img, top_left, bot_right, extended_ratio, **kwargs):
-        rm_left = self.low_canny
-        rm_right = self.high_canny
         img_out = img.copy()
         width_box = bot_right[1] - top_left[1]
         height_box = bot_right[0] - top_left[0]
@@ -67,7 +70,16 @@ class CircleDistance:
         # Grayscale image
         gray_img = cv2.cvtColor(crop_img, cv2.COLOR_RGB2GRAY)
         # Binary search algorithm to find LEFTMOST Canny parameter
+        if self.first_detect == 1:
+            rm_left = self.low_canny
+            rm_right = self.high_canny
+            pass
+        else:
+            rm_left = self.last_canny_param - 100
+            rm_right = self.last_canny_param + 100
+        step = 0
         while rm_left < rm_right:
+            step += 1
             canny_param = math.floor((rm_right + rm_left) / (2*self.step_size))*self.step_size
             circles = cv2.HoughCircles(gray_img, cv2.HOUGH_GRADIENT, 1, 100,
                                        param1=canny_param, param2=self.hough_param, minRadius=0, maxRadius=0)
@@ -75,12 +87,14 @@ class CircleDistance:
                 rm_right = canny_param
             else:
                 rm_left = canny_param + self.step_size
+        print("Iteration step taken: %d" % step)
         canny_param = rm_left - self.step_size
         # Detect circle with determined Canny parameter
         circles = cv2.HoughCircles(gray_img, cv2.HOUGH_GRADIENT, 1, 100,
                                    param1=canny_param, param2=self.hough_param, minRadius=0, maxRadius=0)
         # Return error if circle is undetectable
         if circles is None:
+            self.first_detect = 1
             return [-1, img_out, self.NON_CIRCLE_ERROR]
         circles_round = np.round(circles[0, :]).astype("int")
         # Mark detected circle in image
@@ -91,10 +105,13 @@ class CircleDistance:
             cv2.rectangle(img_out, (y_axis_extended[0], x_axis_extended[0]), (y_axis_extended[1], x_axis_extended[1]),
                           (255, 0, 0), 2)
         if circles.shape[1] > 1:
+            self.first_detect == 1
             return [-1, img_out, self.MULTIPLE_CIRCLES_ERROR]
         radius_pixel = circles[0][0][2]
         # Calculate distance with linear regression function
         distance = self.slope * 1/radius_pixel + self.intercept
+        self.last_canny_param = canny_param
+        self.first_detect = 0
         return [distance, img_out, self.NO_ERROR]
 
 
