@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 import imutils
 import math
+from scipy.signal import butter, filtfilt
 
 
 ''' CircleDistance module:
@@ -33,7 +34,13 @@ class CircleDistance:
         self.intercept = intercept  # Intercept of linear regression distance estimate function
         self.hough_param = hough_param  # This value should varies between 20-70 (30 is best for some cases)
         self.first_detect = 1
+        self.redetect = 1
         self.last_canny_param = 450
+        self.distance_array = np.zeros(16)
+        self.distance_filtered = 0
+        self.normal_cutoff = 1/6
+        self.order = 4
+        self.b, self.a = butter(self.order, self.normal_cutoff, btype='low', analog=False, output='ba')
 
     def calculate(self, img, top_left, bot_right, extended_ratio, **kwargs):
         img_out = img.copy()
@@ -73,12 +80,12 @@ class CircleDistance:
         # Grayscale image
         gray_img = cv2.cvtColor(crop_img, cv2.COLOR_RGB2GRAY)
         # Binary search algorithm to find RIGHTMOST Canny parameter
-        if self.first_detect == 1:
+        if self.redetect == 1:
             rm_left = self.low_canny
             rm_right = self.high_canny
             pass
         else:
-            rm_left = self.last_canny_param - 60
+            rm_left = max(self.last_canny_param - 60, 0)
             rm_right = self.last_canny_param + 60
         canny_param = rightmost_canny_param_search(gray_img, rm_left, rm_right,
                                                    self.step_size, self.hough_param)
@@ -87,7 +94,7 @@ class CircleDistance:
                                    param1=canny_param, param2=self.hough_param, minRadius=0, maxRadius=0)
         # Return error if circle is undetectable
         if circles is None:
-            self.first_detect = 1
+            self.redetect = 1
             return [-1, img_out, self.NON_CIRCLE_ERROR]
         circles_round = np.round(circles[0, :]).astype("int")
         # Mark detected circle in image
@@ -96,14 +103,30 @@ class CircleDistance:
             cv2.rectangle(img_out, (y - 5 + y_axis_extended[0], x - 5 + x_axis_extended[0]),
                           (y + 5 + y_axis_extended[0], x + 5 + x_axis_extended[0]), (0, 128, 255), -1)
         if circles.shape[1] > 1:
-            self.first_detect == 1
+            self.redetect == 1
             return [-1, img_out, self.MULTIPLE_CIRCLES_ERROR]
         radius_pixel = circles[0][0][2]
         # Calculate distance with linear regression function
         distance = self.slope * 1/radius_pixel + self.intercept
         self.last_canny_param = canny_param
-        self.first_detect = 0
+        self.redetect = 0
         return [distance, img_out, self.NO_ERROR]
+
+    def low_pass_calc(self, img, top_left, bot_right, extended_ratio, **kwargs):
+        distance, img_out, error_code = self.calculate(img, top_left, bot_right, extended_ratio, **kwargs)
+        if error_code == 0:
+            if self.first_detect == 1:
+                self.distance_array = [distance]*16
+                self.distance_filtered = distance
+                self.first_detect = 0
+            else:
+                for j in range(0, len(self.distance_array) - 1):
+                    self.distance_array[j] = self.distance_array[j + 1]
+                self.distance_array[len(self.distance_array) - 1] = distance
+                self.distance_filtered = filtfilt(self.b, self.a, self.distance_array)[15]
+        else:
+            pass
+        return [self.distance_filtered, img_out, error_code]
 
 
 ''' This is a simple distance estimate formula with known width object'''
