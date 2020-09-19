@@ -28,7 +28,7 @@ _,mask = cv2.threshold(gray,0,255,cv2.THRESH_BINARY)
 mask=cv2.resize(mask,Reverse(background.shape[:-1]))
 mask_inv = cv2.bitwise_not(mask)
 
-cv2.imwrite('b.jpg',mask_inv)
+
 fg=cv2.bitwise_and(foreground,foreground,None,mask)
 bg=cv2.bitwise_and(background,background,None,mask_inv)
 dst = cv2.add(bg,fg)
