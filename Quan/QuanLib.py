@@ -169,14 +169,13 @@ def CaptureSample(save_dir='',extention='.jpg',cam=0,heigth=480,width=640,color=
 # save_dir: địa chỉ thư mục lưu ảnh, để dưới dạng '\' cũng được
 # name: tên ảnh
 # beginIndex = số thứ tự ảnh bắt đầu
-# imgPerIndex: số ảnh mỗi index, số thứ tự các ảnh này được biểu diễn bởi sub_index
+# imgPerIdxNum: số ảnh mỗi index, số thứ tự các ảnh này được biểu diễn bởi sub_index
 # extension: đuôi ảnh, vd '.jpg', '.png'
 # cấu trúc tên file: name + '_' + index + '_' + sub_index + extension
 # cam: nếu cam là số thì là chọn camera để lấy mẫu, nếu cam là str thì là đường dẫn tới video dùng để lấy mẫu
 # height: chiều cao ảnh
-# width: chiều dài ảnh
-# color = 1 nếu là lấy ảnh màu, = 0 là lấy ảnh xám'''
-def getSampleImage(save_dir, name, beginIndex=20, imgPerIndex = 0, extention='.jpg', cam=1, height=480, width=640, color=1):
+# width: chiều dài ảnh'''
+def getSampleImage(save_dir, name, beginIndex=20, imgPerIdxNum = 0, extention='.jpg', cam=1, height=480, width=640):
   # Capture frame
   cap = cv2.VideoCapture(cam)
   # Kiểm tra xem lấy được frame chưa
@@ -190,7 +189,7 @@ def getSampleImage(save_dir, name, beginIndex=20, imgPerIndex = 0, extention='.j
   cv2.putText(title, 'Right click to save', (105, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 255, 255), 2,
               lineType=cv2.LINE_AA)
   # Khởi tạo các biến
-  global isCapturing, index, sub_index #Khai báo biến toàn cục để sử dụng chung với hàm con
+  global isCapturing, index, sub_index, frame #Khai báo biến toàn cục để sử dụng chung với hàm con
   index = beginIndex
   sub_index = 1
   isCapturing = False
@@ -198,65 +197,72 @@ def getSampleImage(save_dir, name, beginIndex=20, imgPerIndex = 0, extention='.j
   # Hàm gọi tới khi nhấn chuột:
   def mouseCallback(event, x, y, flags, param):
     # Khai báo biến toàn cục để sử dụng chung với hàm mẹ
-    global isCapturing, index, sub_index
+    global isCapturing, index, sub_index, frame
+    # Thao tác khi nhấp trái chuột
     if event == cv2.EVENT_LBUTTONDOWN:
+      # Đảo trạng thái của cờ cho biết đang lấy hình hay không
       isCapturing = not isCapturing
+      # Thao tác khi đang lấy hình
       if isCapturing:
-        title = np.zeros((58, 640, 3), dtype=np.uint8)
-        if imgPerIndex:
-            imageName = name + '_' + str(index) + '_' + str(sub_index) + extention
+        # Tăng chỉ số khoảng cách thêm 1
+        index += 1
+        # Nếu mỗi khoảng cách 1 ảnh
+        if imgPerIdxNum == 1:
+          ok, frame = cap.read()
+          title = np.zeros((58, 640, 3), dtype=np.uint8)
+          imageName = name + '_' + str(index-1) + extention
+          cv2.putText(title, imageName + ' saved', (105, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 255, 0), 2,
+                      lineType=cv2.LINE_AA)
+          cv2.imwrite(save_dir + '/' + imageName, frame)
+          cv2.imshow('frame', cv2.vconcat([title, frame]))
+        # Nếu mỗi khoảng cách lấy nhiều ảnh, tự động lấy imgPerIdxNum liên tiếp, cách nhau 0.5s
+        else:
+          for sub_index in range(1,imgPerIdxNum+1):
+            ok, frame = cap.read()
+            title = np.zeros((58, 640, 3), dtype=np.uint8)
+            imageName = name + '_' + str(index-1) + '_' + str(sub_index) + extention
             cv2.putText(title, imageName + ' saved', (85, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 255, 0), 2,
                         lineType=cv2.LINE_AA)
-        else:
-            imageName = name + '_' + str(index) + extention
-            cv2.putText(title, imageName + ' saved', (105, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 255, 0), 2,
-                        lineType=cv2.LINE_AA)
-        cv2.imwrite(save_dir + '/' + imageName, frame)
-        cv2.imshow('frame', cv2.vconcat([title,frame]))
-      else:
-        if sub_index < imgPerIndex:
-            sub_index += 1
-        else:
-            sub_index = 1
-            index += 1
+            cv2.imwrite(save_dir + '/' + imageName, frame)
+            cv2.imshow('frame', cv2.vconcat([title, frame]))
+            cv2.waitKey(500)
+    # Thao tác khi nhấp phải chuột
     elif event == cv2.EVENT_RBUTTONDOWN:
-        title = np.zeros((58, 640, 3), dtype=np.uint8)
-        if imgPerIndex:
-            imageName = name + '_' + str(index) + '_' + str(sub_index) + extention
+        # Nếu mỗi khoảng cách 1 ảnh
+        if imgPerIdxNum == 1:
+          title = np.zeros((58, 640, 3), dtype=np.uint8)
+          imageName = name + '_' + str(index-1) + extention
+          cv2.putText(title, imageName + ' deleted', (105, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 0, 255), 2,
+                      lineType=cv2.LINE_AA)
+          deleted_frame = cv2.imread(save_dir + '/' + imageName)
+          cv2.imshow('frame', cv2.vconcat([title, deleted_frame]))
+          os.remove(save_dir + '/' + imageName)
+        # Nếu mỗi khoảng cách lấy nhiều ảnh, tự động xóa imgPerIdxNum liên tiếp, hiển thị ảnh sẽ xóa cách nhau 0.5s
+        else:
+          for sub_index in reversed(range(1, imgPerIdxNum + 1)):
+            title = np.zeros((58, 640, 3), dtype=np.uint8)
+            imageName = name + '_' + str(index-1) + '_' + str(sub_index) + extention
             cv2.putText(title, imageName + ' deleted', (65, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 0, 255), 2,
                         lineType=cv2.LINE_AA)
-        else:
-            imageName = name + '_' + str(index) + extention
-            cv2.putText(title, imageName + ' deleted', (105, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 0, 255), 2,
-                        lineType=cv2.LINE_AA)
-        deleted_frame = cv2.imread(save_dir + '/' + imageName)
-        cv2.imshow('frame', cv2.vconcat([title,deleted_frame]))
-        os.remove(save_dir + '/' + imageName)
-        if imgPerIndex:
-            if sub_index > 1:
-                sub_index -= 1
-            else:
-                sub_index = imgPerIndex
-                index -= 1
-        else:
-            index -= 1
+            deleted_frame = cv2.imread(save_dir + '/' + imageName)
+            cv2.imshow('frame', cv2.vconcat([title,deleted_frame]))
+            cv2.waitKey(500)
+            os.remove(save_dir + '/' + imageName)
+        index -= 1
     return
-
   # Tạo cửa sổ hiển thị và cài đặt ngắt lên cửa sổ đó
   cv2.namedWindow('frame')
   cv2.setMouseCallback('frame', mouseCallback)
 
   # Vòng lặp chính
   while True:
-    # Nếu không đang capture frame thì lấy và hiển thị frame mới
+    # Nếu không đang lấy frame thì lấy và hiển thị frame mới
     if not isCapturing:
       ok, frame = cap.read()
       if not ok:
         break
-      if color == 0:
-        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
       cv2.imshow('frame', cv2.vconcat([title,frame]))
-    # Giữ cửa sổ hiển thị
+    # Nếu đang lấy frame thì giữ cửa sổ hiển thị
     key = cv2.waitKey(1)
     # Ấn esc để thoát
     if key == 27:
@@ -547,7 +553,7 @@ print(butter_lowpass_filter(data=[0,10],cutoff=1,fs=10,order=5))'''
                   ROI=[220, 75, 420, 95])'''
 
 #CaptureSample('D:\\WON\\DO_AN\\Data', '.jpg', 0, 480, 640, 1, 20, 60)
-
-'''getSampleImage(save_dir='D:\WON\DO_AN\Data',name='test', beginIndex=20,
-        imgPerIndex = 5, extention='.jpg', cam=0, height=480, width=640, color=1)'''
-'''getSampleVideo(cam=1,save_dir='D:\WON\DO_AN\Data',name='video',extension='.avi',height=480,width=640)'''
+getSampleImage(save_dir='D:\WON\DO_AN\Data',name='test', beginIndex=20,
+        imgPerIdxNum = 5, extention='.jpg', cam=0, height=480, width=640)
+'''getSampleVideo(cam=1,save_dir='D:\WON\DO_AN\Data\Training\Damper',name='damper',extension='.avi',height=480,width=640)'''
+'''gamma_correct(img_dir='D:\WON\DO_AN\Data\Training\Ball\\ball_20_1.jpg',data_dir='',gamma=2.5,save_dir='D:\WON\DO_AN\Data\Training\Ball\\ball_20_1.jpg')'''
