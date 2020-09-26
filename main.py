@@ -4,26 +4,30 @@ from Huy.checkingline import Line
 import numpy as np
 import sys
 import time
+from Tho.Main_lib import distance_calc as Tho
 
 # Mở camera
-cap = cv2.VideoCapture('D:\\WON\\DO_AN\\Code\\Video\\video2.avi')
+cap = cv2.VideoCapture(1)
 if cap.isOpened() == False:
     sys.exit("Unable to read camera feed")
 
 # Tạo mô hình nhận dạng
-model = QuanLib.Yolov3(weights_dir='D:\\WON\\DO_AN\\Code\\Model\\YOLOv3\\yolov3_best.weights',
-                        cfg_dir='D:\\WON\\DO_AN\\Code\\Model\\YOLOv3\\yolov3.cfg',
-                          names_dir='D:\\WON\\DO_AN\\Code\\Model\\YOLOv3\\obj.names')
+model = QuanLib.Yolov3(weights_dir='D:\\WON\\DO_AN\\Model\\yolov3_best.weights',
+                        cfg_dir='D:\\WON\\DO_AN\\Model\\yolov3.cfg',
+                          names_dir='D:\\WON\\DO_AN\\Model\\obj.names')
 
 # Tạo bộ lọc
 filter = QuanLib.butter_lowpass_filter(order=2, cutoff=0.7, fs=10)
 
+# Khởi tạo bộ ước lượng khoảng cách
+Circle_based_estimate_1 = Tho.CircleDistance(50, 5000000, 1, 50, 867.7887424687945, -0.18242145320198588)
 # Khai báo các biến
 ob_in_area = 0 # Biến trạng thái, cho biết vật cản có nằm trong vùng xét dây hay không
 inv_w_array = [0, 0, 0] # Ma trận lưu 3 giá trị nghịch đảo độ dài box gần nhất
 pre_time = time.time() # Biến tạm thời gian
 a = 4132.45382956        # a,b là hệ số của phương trình hồi quy tuyến tính
 b = 2.4475897335913714   # y = ax + b
+img_out = np.zeros((480,640,3))
 while True:
     # Đọc frame
     ok, frame = cap.read()
@@ -42,7 +46,9 @@ while True:
         if model.box_width != 0:
             inv_w_array = inv_w_array[1:3] + [1 / model.box_width]
             # print(inv_w_array)
-            Distance = round(a * filter.output(data=inv_w_array)[2] + b,1)
+            #Distance = round(a * filter.output(data=inv_w_array)[2] + b,1)
+            Distance, img_out, _ = Circle_based_estimate_1.calculate(frame, (model.top_left_y, model.top_left_x), (model.bottom_right_y, model.bottom_right_x),
+                                                         0.2, mode=1, object_width=10)
     else:
         Distance = ' ?  '
         pass
@@ -93,6 +99,7 @@ while True:
     # Hiển thị toàn bộ
     result_image = cv2.vconcat([info_panel, frame])
     cv2.imshow('result',result_image)
+    cv2.imshow('circle',img_out)
 
     # Thao tác bàn phím
     toggle = cv2.waitKey(1)
