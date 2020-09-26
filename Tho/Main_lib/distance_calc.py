@@ -76,7 +76,7 @@ class CircleDistance:
         crop_img = img[x_axis_extended[0]: x_axis_extended[1], y_axis_extended[0]:y_axis_extended[1]]
         cv2.rectangle(img_out, (y_axis_extended[0], x_axis_extended[0]), (y_axis_extended[1], x_axis_extended[1]),
                       (255, 0, 0), 2)
-        # cv2.imwrite("img_test.jpg", crop_img)
+        cv2.imwrite("img_test.jpg", crop_img)
         # Grayscale image
         gray_img = cv2.cvtColor(crop_img, cv2.COLOR_RGB2GRAY)
         # Binary search algorithm to find RIGHTMOST Canny parameter
@@ -85,15 +85,15 @@ class CircleDistance:
             rm_right = self.high_canny
             pass
         else:
-            rm_left = max(self.last_canny_param - 60, 0)
-            rm_right = self.last_canny_param + 60
+            rm_left = max(self.last_canny_param - 200, 0)
+            rm_right = self.last_canny_param + 200
         canny_param = rightmost_canny_param_search(gray_img, rm_left, rm_right,
                                                    self.step_size, self.hough_param)
         # Detect circle with determined Canny parameter
         circles = cv2.HoughCircles(gray_img, cv2.HOUGH_GRADIENT, 1, 100,
                                    param1=canny_param, param2=self.hough_param, minRadius=0, maxRadius=0)
         # Return error if circle is undetectable
-        if circles is None:
+        if circles is None or circles[0][0][2] == 0:
             self.redetect = 1
             return [-1, img_out, self.NON_CIRCLE_ERROR]
         circles_round = np.round(circles[0, :]).astype("int")
@@ -144,7 +144,7 @@ def rightmost_canny_param_search(gray_img, rm_left, rm_right, step_size, hough_p
         canny_param = math.floor((rm_right + rm_left) / (2 * step_size)) * step_size
         circles = cv2.HoughCircles(gray_img, cv2.HOUGH_GRADIENT, 1, 100,
                                    param1=canny_param, param2=hough_param, minRadius=0, maxRadius=0)
-        if circles is None:
+        if circles is None or circles[0][0][2] == 0:
             rm_right = canny_param
         else:
             rm_left = canny_param + step_size

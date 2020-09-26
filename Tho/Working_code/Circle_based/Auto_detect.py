@@ -11,10 +11,10 @@ def nothing():
 
 # Example usage: python3 Detect_circle.py --image ./Changed_data/20.jpg
 # For Pycharm: Edit Configuration -> Parameters -> --image ./Changed_data/20.jpg
-img = cv2.imread("Changed_data/40.jpg")
+img = cv2.imread("./Changed_data/20.jpg")
 start_time = time.time()
-Canny_low = 300
-Canny_high = 600
+Canny_low = 0
+Canny_high = 2000
 Canny_param = Canny_high
 start_time = time.time()
 RM_left = Canny_low
@@ -25,7 +25,7 @@ step = 1
 while RM_left < RM_right:
     Canny_param = math.floor((RM_right+RM_left)/2)
     circles = cv2.HoughCircles(gray, cv2.HOUGH_GRADIENT, 1, 100,
-                               param1=Canny_param, param2=30, minRadius=0, maxRadius=0)
+                               param1=Canny_param, param2=10, minRadius=0, maxRadius=0)
     print(step)
     step += 1
     if circles is None:
