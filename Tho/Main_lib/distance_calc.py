@@ -5,6 +5,26 @@ import math
 from scipy.signal import butter, filtfilt
 
 
+''' CircleBasedObjectDistance class:
+    This class includes all working object using circle detection
+    The index of __init__ in this class is as following:
+    (low_canny, high_canny, step_size, hough_param, slope, intercept, object_width)
+'''
+
+
+class CircleBasedObjectDistance:
+    def __init__(self, focal_length):
+        self.focal_length = focal_length
+        self.damper = CircleDistance(0, 50000, 1, 25, 867.7887424687945, -0.18242145320198588, 10, 764)
+        self.ball = CircleDistance(0, 50000, 1, 25, 867.7887424687945, -0.18242145320198588, 10, 764)
+
+    def calculate(self, img, top_left, bot_right, extended_ratio, object_name, mode):
+        if object_name is "damper":
+            return self.damper.low_pass_calc(img, top_left, bot_right, extended_ratio, mode)
+        elif object_name is "ball":
+            return self.ball.low_pass_calc(img, top_left, bot_right, extended_ratio, mode)
+
+
 ''' CircleDistance module:
     For initialize: 
     1. This module should be initialize before using, recommended params for Canny and Hough respectively 
@@ -22,7 +42,7 @@ from scipy.signal import butter, filtfilt
 
 
 class CircleDistance:
-    def __init__(self, low_canny, high_canny, step_size, hough_param, slope, intercept):
+    def __init__(self, low_canny, high_canny, step_size, hough_param, slope, intercept, object_width, focal_length):
         self.NO_ERROR = 0
         self.INVALID_INPUT_ERROR = 1
         self.NON_CIRCLE_ERROR = 2   # Circle undetectable
@@ -33,6 +53,8 @@ class CircleDistance:
         self.slope = slope  # Slope of linear regression distance estimate function
         self.intercept = intercept  # Intercept of linear regression distance estimate function
         self.hough_param = hough_param  # This value should varies between 20-70 (30 is best for some cases)
+        self.object_width = object_width
+        self.focal_length = focal_length
         self.first_detect = 1
         self.redetect = 1
         self.last_canny_param = 450
@@ -40,10 +62,14 @@ class CircleDistance:
         self.distance_filtered = 0
         self.normal_cutoff = 1/6
         self.order = 4
-        self.b, self.a = butter(self.order, self.normal_cutoff, btype='low', analog=False, output='ba')
+        [self.b, self.a] = butter(self.order, self.normal_cutoff, btype='low', analog=False, output='ba')
 
-    def calculate(self, img, top_left, bot_right, extended_ratio, **kwargs):
-        img_out = img.copy()
+    def calculate(self, img, top_left, bot_right, extended_ratio, mode):
+        try:
+            img_out = img.copy()
+        except Exception:
+            self.redetect = 1
+            return [-1, np.zeros([500, 500]), self.INVALID_INPUT_ERROR]
         width_box = bot_right[1] - top_left[1]
         height_box = bot_right[0] - top_left[0]
         # Check for invalid input
@@ -52,18 +78,13 @@ class CircleDistance:
             return [-1, img_out, self.INVALID_INPUT_ERROR]
         # mode = 0 when not using circle detection
         # mode = 1 when using circle detection (default)
-        if "mode" in kwargs:
-            if kwargs['mode'] == 0:
-                if 'object_width' in kwargs:
-                    distance = calculate_distance(kwargs['object_width'], 764, width_box)
-                    cv2.rectangle(img_out, tuple(top_left), tuple(bot_right), color=(255, 0, 0), thickness=2)
-                    return [distance, img_out, 0]
-                else:
-                    print("object_width is missing")
-                    return [-1, img_out, self.INVALID_INPUT_ERROR]
-            elif kwargs['mode'] != 1:
-                print("Wrong mode selected")
-                return [-1, img_out, self.INVALID_INPUT_ERROR]
+        if mode == 0:
+            distance = calculate_distance(self.object_width, self.focal_length, width_box)
+            cv2.rectangle(img_out, tuple(top_left), tuple(bot_right), color=(255, 0, 0), thickness=2)
+            return [distance, img_out, 0]
+        elif mode != 1:
+            print("Wrong mode selected")
+            return [-1, img_out, self.INVALID_INPUT_ERROR]
         else:
             pass
         # Calculate x axis extended
@@ -83,10 +104,9 @@ class CircleDistance:
         if self.redetect == 1:
             rm_left = self.low_canny
             rm_right = self.high_canny
-            pass
         else:
-            rm_left = max(self.last_canny_param - 200, 0)
-            rm_right = self.last_canny_param + 200
+            rm_left = max(self.last_canny_param - 2000, 0)
+            rm_right = self.last_canny_param + 2000
         canny_param = rightmost_canny_param_search(gray_img, rm_left, rm_right,
                                                    self.step_size, self.hough_param)
         # Detect circle with determined Canny parameter
@@ -103,7 +123,7 @@ class CircleDistance:
             cv2.rectangle(img_out, (y - 5 + y_axis_extended[0], x - 5 + x_axis_extended[0]),
                           (y + 5 + y_axis_extended[0], x + 5 + x_axis_extended[0]), (0, 128, 255), -1)
         if circles.shape[1] > 1:
-            self.redetect == 1
+            self.redetect = 1
             return [-1, img_out, self.MULTIPLE_CIRCLES_ERROR]
         radius_pixel = circles[0][0][2]
         # Calculate distance with linear regression function
@@ -112,8 +132,8 @@ class CircleDistance:
         self.redetect = 0
         return [distance, img_out, self.NO_ERROR]
 
-    def low_pass_calc(self, img, top_left, bot_right, extended_ratio, **kwargs):
-        distance, img_out, error_code = self.calculate(img, top_left, bot_right, extended_ratio, **kwargs)
+    def low_pass_calc(self, img, top_left, bot_right, extended_ratio, mode):
+        distance, img_out, error_code = self.calculate(img, top_left, bot_right, extended_ratio, mode)
         if error_code == 0:
             if self.first_detect == 1:
                 self.distance_array = [distance]*16
@@ -199,6 +219,8 @@ def edge_based(img, start_point, end_point, extended_ratio, canny_var_1, canny_v
             error = 0
         except Exception:
             error = 1
+            distance = -1
+            img_out = img
     else:
         return [-1, crop_img, 1]
     return [distance, img_out, error]
