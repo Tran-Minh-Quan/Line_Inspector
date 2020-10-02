@@ -12,8 +12,8 @@ from sklearn.metrics import max_error
 from scipy.signal import butter,filtfilt
 
 
-# Class bao gồm những lệnh liên quan yolov3
-class Yolov3:
+# Class bao gồm những lệnh liên quan yolo
+class Yolo:
     def __init__(self, cfg_dir, weights_dir, names_dir):
         self.cfg_dir = cfg_dir
         self.weights_dir = weights_dir
@@ -52,27 +52,17 @@ class Yolov3:
                     detector_idxs.append(class_id)
         indexes = cv2.dnn.NMSBoxes(boxes, confidences, 0, 0.4)
 
-        self.box_width = None
-        self.top_left_x = None
-        self.top_left_y = None
-        self.bottom_right_x = None
-        self.bottom_right_y = None
-        #self.index = None
-        self.name = '?    '
-        self.confidence = 0
+        results = []
         for i in indexes:
             i = i[0]
-            self.top_left_x, self.top_left_y, self.bottom_right_x, self.bottom_right_y = boxes[i]
-            self.box_width = self.bottom_right_x - self.top_left_x
-            #self.index = detector_idxs[i]
-            self.name = self.classes[detector_idxs[i]]
-            self.confidence = confidences[i]
-            '''cv2.rectangle(frame, (self.top_left_x, self.top_left_y), (self.bottom_right_x, self.bottom_right_y), (0, 250, 0), 2)
-            cv2.putText(frame, self.name + '  ' + str(np.round(self.confidence * 100, 2)) + '%',
-                        (self.top_left_x, self.top_left_y-10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (250, 0, 0), 1, lineType=cv2.LINE_AA)'''
-            # cv2.imshow('frame',frame)
-            # cv2.waitKey(0)
+            obstacle = {}
+            obstacle['name'] = self.classes[detector_idxs[i]]
+            obstacle['confidence'] = round(confidences[i]*100)
+            obstacle['top left'] = (boxes[i][0],boxes[i][1])
+            obstacle['bottom right'] = (boxes[i][2],boxes[i][3])
+            obstacle['width'] = boxes[i][2] - boxes[i][0]
+            results.append(obstacle)
+        return results
 
 
 class butter_lowpass_filter:
@@ -108,13 +98,14 @@ def gamma_correct(img_dir='',data_dir='',gamma=1,save_dir=''):
         return result_img
     else:
         img_arr = os.listdir(data_dir)
-        for i in img_arr:
-            origin_img = cv2.imread(data_dir + '\\' + i)
+        for i, img_name in enumerate(img_arr,1):
+            origin_img = cv2.imread(data_dir + '\\' + img_name)
             result_img = cv2.LUT(origin_img, table)
-            img_diff = np.hstack([origin_img, result_img])
-            cv2.imshow("image " + i+ " difference", img_diff)
-            #cv2.waitKey(0)
-            cv2.imwrite(save_dir + '\\' + i, result_img)
+            print('Number of image processed: '+str(i)+'/'+str(len(img_arr)))
+            # img_diff = np.hstack([origin_img, result_img])
+            # cv2.imshow("image " + img_name+ " difference", img_diff)
+            # cv2.waitKey(0)
+            cv2.imwrite(save_dir + '\\' + img_name, result_img)
     return
 
 
@@ -364,10 +355,10 @@ def getdata4linReg(data_dir='',
     img_array = os.listdir(data_dir)
     # array chua khoang cach thuc cua moi anh
     dis_array = np.array([])
-    # array chua nghich dao do dai bounding box duoc tao tu yolov3
+    # array chua nghich dao do dai bounding box duoc tao tu yolo
     inv_w_array = np.array([])
 
-    # khoi tao mang yolov3
+    # khoi tao mang yolo
     net = cv2.dnn.readNetFromDarknet(cfg_dir, weights_dir)
     net.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
     net.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
@@ -439,14 +430,14 @@ def getdata4linReg(data_dir='',
 
 def linear_regression(inv_w_array_dir = '',dis_array_dir = ''):
     # Lay du lieu nghich dao do dai box va khoang cach tu file .npy
-    inv_w_array = np.load(inv_w_array_dir)
-    dis_array = np.load(dis_array_dir)
+    inv_w_array = np.loadtxt(inv_w_array_dir)
+    dis_array = np.loadtxt(dis_array_dir)
     # Ve du lieu truoc khi qua bo loc
     plt.plot(inv_w_array,dis_array, 'o')
     # Ve du lieu sau khi qua bo loc
-    filtered_inv_w_array = butter_lowpass_filter(data=inv_w_array,cutoff=0.999,fs=10,order=2)
+    #filtered_inv_w_array = butter_lowpass_filter(cutoff=0.999,fs=10,order=2).output(data = inv_w_array)
     #print(filtered_inv_w_array)
-    plt.plot(filtered_inv_w_array,dis_array,'o')
+    #plt.plot(filtered_inv_w_array,dis_array,'o')
     # Tao mo hinh hoi quy
     #a, b = np.polyfit(inv_w_array,dis_array,1)
     inv_w_array = np.reshape(inv_w_array,(-1,1))
@@ -454,15 +445,15 @@ def linear_regression(inv_w_array_dir = '',dis_array_dir = ''):
     a = model.coef_
     b = model.intercept_
     # In ket qua ra man hinh
-    print('a = '+str(a)+' b= '+str(b))
+    print('a = '+str(a.item())+' b= '+str(b))
     dis_pred_array = a * inv_w_array + b
-    filtered_dis_pred_array = a * filtered_inv_w_array + b
+    #filtered_dis_pred_array = a * filtered_inv_w_array + b
     print('mean absolute error = '+str(mean_absolute_error(dis_array,dis_pred_array)))
     print('root mean squared error = ' + str(np.sqrt(mean_squared_error(dis_array, dis_pred_array))))
     print('max error = '+str(max_error(dis_array,dis_pred_array)))
-    print('mean absolute error after filtered = '+str(mean_absolute_error(dis_array,filtered_dis_pred_array)))
-    print('root mean squared error after filtered = ' + str(np.sqrt(mean_squared_error(dis_array, filtered_dis_pred_array))))
-    print('max error after filtered = '+str(max_error(dis_array,filtered_dis_pred_array)))
+    # print('mean absolute error after filtered = '+str(mean_absolute_error(dis_array,filtered_dis_pred_array)))
+    # print('root mean squared error after filtered = ' + str(np.sqrt(mean_squared_error(dis_array, filtered_dis_pred_array))))
+    # print('max error after filtered = '+str(max_error(dis_array,filtered_dis_pred_array)))
     # Ve duong hoi quy
     plt.plot(inv_w_array, dis_pred_array)
     plt.xlabel('1/w')
@@ -529,6 +520,66 @@ def getTemplate(video_dir, save_dir,template_name, ROI):
     return
 
 
+def cvtImages2Video(img_folder_dir,save_dir,video_name):
+    imgs = [img for img in os.listdir(img_folder_dir) if img.endswith('.jpg')]
+    # Sắp xếp lại các ảnh theo thứ tự tăng dần khoảng cách
+    distances = [int(img.split('.')[0].split('_')[1]) for img in imgs]
+    zipped_lists = zip(distances, imgs)
+    sorted_pairs = sorted(zipped_lists)
+    tuples = zip(*sorted_pairs)
+    distances, imgs = [list(tuple) for tuple in tuples]
+    # Lấy kích thước frame và tạo bộ ghi hình
+    frame = cv2.imread(os.path.join(img_folder_dir, imgs[0]))
+    height, width, channels = frame.shape
+    fourcc = cv2.VideoWriter_fourcc('m','p','4','v')
+    video = cv2.VideoWriter(os.path.join(save_dir,video_name), fourcc, 30, (width, height))
+    print(imgs)
+    for img in imgs:
+        video.write(cv2.imread(os.path.join(img_folder_dir, img)))
+    video.release()
+
+
+def modelTest(img_dir,mask_dir=None,background=1,brightness=1,blur=1,shift=1,rotate=1):
+    model = Yolo(weights_dir='D:\\WON\\DO_AN\\Code\\Model\\YOLOv3\\yolov3_best.weights',
+                           cfg_dir='D:\\WON\\DO_AN\\Code\\Model\\YOLOv3\\yolov3.cfg',
+                           names_dir='D:\\WON\\DO_AN\\Code\\Model\\YOLOv3\\obj.names')
+    img = cv2.imread(img_dir)
+    height, width, channels = img.shape
+    def Trackchanged(x):
+        pass
+
+    winName = 'Model test'
+    cv2.namedWindow(winName)
+    cv2.createTrackbar('BG', winName, 0, 1, Trackchanged)
+    cv2.createTrackbar('Brightness', winName, 1, 100, Trackchanged)
+    cv2.createTrackbar('Blur', winName, 1,100, Trackchanged)
+    cv2.createTrackbar('Shift_x', winName, 1, width, Trackchanged)
+    cv2.createTrackbar('Shift_y', winName, 1, height, Trackchanged)
+    cv2.createTrackbar('Rotate', winName, 1,360, Trackchanged)
+
+    while True:
+        bg_flag = cv2.getTrackbarPos('BG', winName)
+        gamma = cv2.getTrackbarPos('Brightness', winName)
+        ksize = cv2.getTrackbarPos('Blur', winName)
+        shift_x = cv2.getTrackbarPos('Shift_x', winName)
+        shift_y = cv2.getTrackbarPos('Shift_y', winName)
+        angle = cv2.getTrackbarPos('Rotate', winName)
+        try:
+            blurred_img = cv2.GaussianBlur(img.copy(), (ksize, ksize), 0)
+            results = model.detect(blurred_img)
+            for result in results:
+                cv2.putText(blurred_img, result['name']+'    '+str(result['confidence'])+'%',(result['top left'][0],result['top left'][1]-5),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 0, 0), 1, lineType=cv2.LINE_AA)
+                cv2.rectangle(blurred_img, result['top left'], result['bottom right'], (0, 255, 0), 1)
+        except:
+            pass
+        cv2.imshow('result', blurred_img)
+        cv2.waitKey(1)
+
+
+
+
+# modelTest(r'D:\WON\DO_AN\Data\Training\Lan1\Damper\Images\gamma_corrected_no_repeat\damper_20_1.jpg')
 '''cv2.imshow("result",gamma_correct(img_dir='D:\\WON\\DO_AN\\Changed_data\\49.jpg',gamma=2))
 cv2.waitKey(0)'''
 '''getdata4linReg(data_dir='D:\\WON\\DO_AN\\Data\\Distance_estimate',
@@ -547,13 +598,16 @@ print(butter_lowpass_filter(data=[0,10],cutoff=1,fs=10,order=5))'''
     cv2.waitKey(0)
     cv2.imwrite('D:\\WON\\DO_AN\\Cho_thay_xem\\'+image,detected_frame)'''
 
-'''get_template_tool(video_dir='D:\\WON\\DO_AN\\Code\\Huy\\video_test_day.avi',
-                  save_dir='D:\\WON\\DO_AN\\Code\\Huy',
-                  template_name='quan1_template.jpg',
-                  ROI=[220, 75, 420, 95])'''
+# getTemplate(video_dir='D:\\WON\\DO_AN\\Code\\Huy\\video_test_day.avi',
+#                   save_dir='D:\\WON\\DO_AN\\Code\\Huy',
+#                   template_name='quan1_template.jpg',
+#                   ROI=[220, 75, 420, 95])
 
-#CaptureSample('D:\\WON\\DO_AN\\Data', '.jpg', 0, 480, 640, 1, 20, 60)
-getSampleImage(save_dir='D:\WON\DO_AN\Data',name='test', beginIndex=20,
-        imgPerIdxNum = 5, extention='.jpg', cam=0, height=480, width=640)
-'''getSampleVideo(cam=1,save_dir='D:\WON\DO_AN\Data\Training\Damper',name='damper',extension='.avi',height=480,width=640)'''
-'''gamma_correct(img_dir='D:\WON\DO_AN\Data\Training\Ball\\ball_20_1.jpg',data_dir='',gamma=2.5,save_dir='D:\WON\DO_AN\Data\Training\Ball\\ball_20_1.jpg')'''
+# CaptureSample('D:\\WON\\DO_AN\\Data', '.jpg', 0, 480, 640, 1, 20, 60)
+# getSampleImage(save_dir='D:\WON\DO_AN\Data\Distance\Damper_3',name='damper', beginIndex=20,
+#         imgPerIdxNum = 5, extention='.jpg', cam=1, height=480, width=640)
+# getSampleVideo(cam=1,save_dir='D:\WON\DO_AN\Data\Training',name='damper',extension='.avi',height=480,width=640)
+# gamma_correct(img_dir='D:\WON\DO_AN\Data\Distance\Damper_2\damper_20_1.jpg',data_dir='',gamma=4,save_dir='D:\WON\DO_AN\Data\Distance\Damper_2\damper_20_1_corrected.jpg')
+# cvtImages2Video(img_folder_dir=r'D:\WON\DO_AN\Data\Training\Lan1\Clamp\No_repeat_images',save_dir=r'D:\WON\DO_AN\Data\Training\Lan1\Clamp',video_name='clamp.mp4')
+
+
