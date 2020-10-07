@@ -15,8 +15,8 @@ from scipy.signal import butter, filtfilt
 class CircleBasedObjectDistance:
     def __init__(self, focal_length):
         self.focal_length = focal_length
-        self.damper = CircleDistance(0, 50000, 1, 25, 867.7887424687945, -0.18242145320198588, 10, 764)
-        self.ball = CircleDistance(0, 50000, 1, 25, 867.7887424687945, -0.18242145320198588, 10, 764)
+        self.damper = CircleDistance(0, 50000, 1, 30, 867.7887424687945, -0.18242145320198588, 10, 764)
+        self.ball = CircleDistance(0, 50000, 1, 30, 867.7887424687945, -0.18242145320198588, 10, 764)
 
     def calculate(self, img, top_left, bot_right, extended_ratio, object_name, mode):
         if object_name is "damper":

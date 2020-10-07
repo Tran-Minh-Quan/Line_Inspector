@@ -553,7 +553,7 @@ print(butter_lowpass_filter(data=[0,10],cutoff=1,fs=10,order=5))'''
                   ROI=[220, 75, 420, 95])'''
 
 #CaptureSample('D:\\WON\\DO_AN\\Data', '.jpg', 0, 480, 640, 1, 20, 60)
-getSampleImage(save_dir='D:\WON\DO_AN\Data',name='test', beginIndex=20,
-        imgPerIdxNum = 5, extention='.jpg', cam=0, height=480, width=640)
+# getSampleImage(save_dir='D:\WON\DO_AN\Data',name='test', beginIndex=20,
+#         imgPerIdxNum = 5, extention='.jpg', cam=0, height=480, width=640)
 '''getSampleVideo(cam=1,save_dir='D:\WON\DO_AN\Data\Training\Damper',name='damper',extension='.avi',height=480,width=640)'''
 '''gamma_correct(img_dir='D:\WON\DO_AN\Data\Training\Ball\\ball_20_1.jpg',data_dir='',gamma=2.5,save_dir='D:\WON\DO_AN\Data\Training\Ball\\ball_20_1.jpg')'''
