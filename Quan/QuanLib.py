@@ -9,10 +9,12 @@ from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_absolute_error
 from sklearn.metrics import mean_squared_error
 from sklearn.metrics import max_error
-from scipy.signal import butter,filtfilt
+from scipy.signal import butter, filtfilt
+import math
+import random
+import albumentations as a
 
 
-# Class bao gồm những lệnh liên quan yolo
 class Yolo:
     def __init__(self, cfg_dir, weights_dir, names_dir):
         self.cfg_dir = cfg_dir
@@ -42,7 +44,7 @@ class Yolo:
                 scores = detection[5:]
                 class_id = np.argmax(scores)
                 confidence = scores[class_id]
-                if confidence > 0:
+                if confidence > 0.5:
                     top_left_x = round((detection[0] - detection[2] / 2) * frame_width)  # top left x = center_x - width
                     top_left_y = round((detection[1] - detection[3] / 2) * frame_height)  # top left y = center_y - height
                     bottom_right_x = round((detection[0] + detection[2] / 2) * frame_width)  # bottom right x = center_x + width
@@ -107,48 +109,6 @@ def gamma_correct(img_dir='',data_dir='',gamma=1,save_dir=''):
             # cv2.waitKey(0)
             cv2.imwrite(save_dir + '\\' + img_name, result_img)
     return
-
-
-def CaptureSample(save_dir='',extention='.jpg',cam=0,heigth=480,width=640,color=1,dmin=20,dmax=60):
-    cap = cv2.VideoCapture(cam)
-    cap.set(4,int(heigth) )
-    cap.set(3,int(width))
-    if not cap.isOpened():
-        sys.exit('Could not open camera')
-    i = dmin
-    while i <= dmax:
-        ok,frame = cap.read()
-        if not ok:
-            break
-        if color==0:
-          frame = cv2.cvtColor(frame ,cv2.COLOR_BGR2GRAY)
-        cv2.imshow('frame',frame)
-        k = cv2.waitKey(300) & 0xff
-        if (k == 27):
-            break
-        elif (k == ord('s')):
-            cv2.destroyAllWindows()
-            cv2.imwrite(save_dir + '\\' + str(i) + extention, frame)
-            '''for j in range(1,11):
-                cv2.destroyAllWindows()
-                cv2.imwrite(save_dir+'\\'+str(i)+'.'+str(j)+extention,frame)'''
-            cv2.imshow(str(i)+extention+'  saved',frame)
-            #f = open(dlink+name+str(i)+'.txt','x+')
-            #f.write(str(dmax))
-            #f.close()
-            k = cv2.waitKey() & 0xff
-            cv2.destroyAllWindows()
-            if (k == ord('d')):
-                os.remove(save_dir + '\\' + str(i) + extention)
-                '''for j in range(1,11):
-                    os.remove(save_dir+'\\'+str(i)+'.'+str(j)+extention)'''
-                cv2.imshow(str(i)+extention+'  deleted',frame)
-                cv2.waitKey()
-                cv2.destroyAllWindows()
-            else:
-                i += 1
-    cap.release()
-    cv2.destroyAllWindows()
 
 
 # Lấy mẫu ảnh
@@ -462,7 +422,6 @@ def linear_regression(inv_w_array_dir = '',dis_array_dir = ''):
     plt.show()
     return
 
-
 # Chú thích cho get_template_tool(...):
 # Chức năng: Lấy template cho thuật toán template matching
 # Thuật toán cho phép xem từng frame của video và chọn ra frame lấy template
@@ -497,8 +456,6 @@ def getTemplate(video_dir, save_dir,template_name, ROI):
         frame_ok, frame = cap.read()
         if frame_ok:
             gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-
-
             blank_img_vsize = (height - (ROI[3]-ROI[1])) // 2
             blank_img_hsize = bottom_right_x - top_left_x
             blank_img = np.zeros((blank_img_vsize, blank_img_hsize, 1), np.uint8)
@@ -539,7 +496,59 @@ def cvtImages2Video(img_folder_dir,save_dir,video_name):
     video.release()
 
 
-def modelTest(img_dir,mask_dir=None,background=1,brightness=1,blur=1,shift=1,rotate=1):
+def testSegmentColor(img_or_video_dir):
+    if not isinstance(img_or_video_dir,str):
+        sys.exit('Ngo vao la duong dan den hinh anh hoac video .avi')
+    winName = 'testSegmentColor'
+    cv2.namedWindow(winName)
+    def callback(x):
+        pass
+    cv2.createTrackbar('lowHue', winName, 103, 179, callback)
+    cv2.createTrackbar('lowSat', winName, 220, 255, callback)
+    cv2.createTrackbar('lowVal', winName, 243, 255, callback)
+    cv2.createTrackbar('highHue', winName, 103, 179, callback)
+    cv2.createTrackbar('highSat', winName, 220, 255, callback)
+    cv2.createTrackbar('highVal', winName, 243, 255, callback)
+    if img_or_video_dir.endswith('.avi'):
+        cap = cv2.VideoCapture(img_or_video_dir)
+        frameNum = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        cv2.createTrackbar('frame', winName, 1, frameNum - 1, callback)
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    while True:
+        if img_or_video_dir.endswith('.avi'):
+            frameIndex = cv2.getTrackbarPos('frame', winName)
+            cap.set(cv2.CAP_PROP_POS_FRAMES, frameIndex)
+            frame_ok, frame = cap.read()
+        else:
+            frame = cv2.imread(img_or_video_dir)
+        lowHue = cv2.getTrackbarPos('lowHue', winName)
+        lowSat = cv2.getTrackbarPos('lowSat', winName)
+        lowVal = cv2.getTrackbarPos('lowVal', winName)
+        highHue = cv2.getTrackbarPos('highHue', winName)
+        highSat = cv2.getTrackbarPos('highSat', winName)
+        highVal = cv2.getTrackbarPos('highVal', winName)
+
+        frame_hsv = cv2.cvtColor(frame,cv2.COLOR_BGR2HSV)
+        mask = cv2.inRange(frame_hsv,(lowHue,lowSat,lowVal),(highHue,highSat,highVal))
+
+        mask_resized = cv2.resize(mask,(640,480),interpolation=cv2.INTER_NEAREST)
+        mask_bgr = cv2.cvtColor(mask_resized,cv2.COLOR_GRAY2BGR)
+        org = cv2.imread(r'D:\WON\DO_AN\Data\Training\Lan1\Damper\Images\gamma_corrected_no_repeat\damper_20_1.jpg')
+        fg = cv2.bitwise_and(org, 255 - mask_bgr)
+        # cv2.imwrite(r'D:\WON\DO_AN\Data\Training\Lan1\Damper\Images\Mask\damper_20_1_mask.png',255 - mask_bgr)
+        # print(frame_hsv)
+        # print(np.where((mask_bgr > 0) & (mask_bgr < 255)))
+
+        # cv2.imshow('mask',mask)
+        # cv2.imshow('frame',frame)
+        cv2.imshow('fg',fg)
+        cv2.waitKey(1)
+    cap.release()
+    cv2.destroyAllWindows()
+
+
+def modelTest(img_dir,bbox_dir,mask_dir):
     model = Yolo(weights_dir='D:\\WON\\DO_AN\\Code\\Model\\YOLOv3\\yolov3_best.weights',
                            cfg_dir='D:\\WON\\DO_AN\\Code\\Model\\YOLOv3\\yolov3.cfg',
                            names_dir='D:\\WON\\DO_AN\\Code\\Model\\YOLOv3\\obj.names')
@@ -550,53 +559,320 @@ def modelTest(img_dir,mask_dir=None,background=1,brightness=1,blur=1,shift=1,rot
 
     winName = 'Model test'
     cv2.namedWindow(winName)
-    cv2.createTrackbar('BG', winName, 0, 1, Trackchanged)
-    cv2.createTrackbar('Brightness', winName, 1, 100, Trackchanged)
+    cv2.createTrackbar('randBG', winName, 1, 1, Trackchanged)
+    cv2.createTrackbar('Gamma', winName, 30, 100, Trackchanged)
     cv2.createTrackbar('Blur', winName, 1,100, Trackchanged)
-    cv2.createTrackbar('Shift_x', winName, 1, width, Trackchanged)
-    cv2.createTrackbar('Shift_y', winName, 1, height, Trackchanged)
-    cv2.createTrackbar('Rotate', winName, 1,360, Trackchanged)
+    cv2.createTrackbar('Shift_x', winName, width, width*2, Trackchanged)
+    cv2.createTrackbar('Shift_y', winName, height, height*2, Trackchanged)
+    cv2.createTrackbar('Scale',winName,10,100,Trackchanged)
+    cv2.createTrackbar('Rotate', winName, 180,360, Trackchanged)
+    cv2.createTrackbar('Brightness', winName, 255,255*2, Trackchanged)
+    cv2.createTrackbar('Contrast', winName, 10,100, Trackchanged)
 
     while True:
-        bg_flag = cv2.getTrackbarPos('BG', winName)
-        gamma = cv2.getTrackbarPos('Brightness', winName)
+        # Cập nhật dữ liệu từ các thanh trượt
+        randBG = cv2.getTrackbarPos('randBG', winName)
+        gamma = cv2.getTrackbarPos('Gamma', winName)
         ksize = cv2.getTrackbarPos('Blur', winName)
         shift_x = cv2.getTrackbarPos('Shift_x', winName)
         shift_y = cv2.getTrackbarPos('Shift_y', winName)
-        angle = cv2.getTrackbarPos('Rotate', winName)
+        scale = cv2.getTrackbarPos('Scale', winName)/10
+        angle = 180 - cv2.getTrackbarPos('Rotate', winName)
+        alpha = cv2.getTrackbarPos('Contrast', winName)/10
+        beta = cv2.getTrackbarPos('Brightness', winName) - 255
+
+        # Các phép không làm thay đổi tọa độ bbox
+
+        # Thay đổi background
+        bboxes = open(bbox_dir, 'r').read().splitlines()
+        if len(bboxes) > 1:
+            sys.exit('Chon anh co 1 vat thoi')
+        bbox = [float(i) for i in bboxes[0].split(' ')[1:]]
+        x_center = int(bbox[0] * width)
+        y_center = int(bbox[1] * height)
+        tl_bbx = [int((bbox[0] - bbox[2] / 2) * width), int((bbox[1] - bbox[3] / 2) * height)]
+        br_bbx = [int((bbox[0] + bbox[2] / 2) * width), int((bbox[1] + bbox[3] / 2) * height)]
+        mask = cv2.imread(mask_dir,0)
+        mask[0:tl_bbx[1] + 1, :] = 0
+        mask[br_bbx[1]:height, :] = 0
+        if randBG:
+            mask_bgr = cv2.cvtColor(mask,cv2.COLOR_GRAY2BGR)
+            bg_rand = (np.random.rand(height,width,channels)*256).astype(np.uint8)
+            bg_rand = cv2.bitwise_and(bg_rand,255-mask_bgr)
+            fg = cv2.bitwise_and(img.copy(),mask_bgr)
+            bgChanged = cv2.add(fg,bg_rand)
+
+        # Làm mờ
+        if ksize % 2:
+            if randBG:
+                blurred = cv2.GaussianBlur(bgChanged, (ksize, ksize), 0)
+            else:
+                blurred = cv2.GaussianBlur(img.copy(), (ksize, ksize), 0)
+
+            # blurred_gray = cv2.cvtColor(blurred,cv2.COLOR_BGR2GRAY)
+            # print(cv2.Laplacian(blurred_gray,cv2.CV_64F).var())
+        else:
+            cv2.waitKey(1)
+            continue
+
+        # Thay đổi gamma
+        if gamma:
+            invGamma = 30 / gamma # Đúng ra là 1/gamma nhưng làm thế để chạy được số thập phân (có thể làm tối)
+            table = np.array([((i / 255.0) ** invGamma) * 255
+                              for i in np.arange(0, 256)]).astype("uint8")
+            gammaCorrected = cv2.LUT(blurred, table)
+        else:
+            cv2.waitKey(1)
+            continue
+
+        # Thay đổi độ sáng và độ tương phản
+        if alpha:
+            table = np.array([])
+            for i in np.arange(0,256):
+                new_value = i*alpha + beta
+                if new_value < 0:
+                    new_value = 0
+                if new_value > 255:
+                    new_value = 255
+                table = np.append(table,new_value)
+            table = table.astype('uint8')
+            brightness_and_contrast_changed = cv2.LUT(gammaCorrected, table)
+        else:
+            cv2.waitKey(1)
+            continue
+
+
+        # Các phép làm thay đổi tọa độ bbox
+
+        # Xoay
+        M = cv2.getRotationMatrix2D((x_center, y_center), angle, 1.0) # Lấy ma trận xoay
+        rotated = cv2.warpAffine(brightness_and_contrast_changed, M, (width, height))   # Xoay ảnh
+        rotated_mask = cv2.warpAffine(mask, M, (width, height)) # Xoay mask
+        # y_coords_white_pixel,x_coords_white_pixel = np.where(rotated_mask == 255)
+        # tl_mask = (min(x_coords_white_pixel),min(y_coords_white_pixel))
+        # br_mask = (max(x_coords_white_pixel),max(y_coords_white_pixel))
+        bbx_mask = cv2.boundingRect(rotated_mask)   # Tính lại bbox sau khi xoay
+        tl_mask = [bbx_mask[0], bbx_mask[1]] # Top left mới
+        br_mask = [bbx_mask[0] + bbx_mask[2] - 1, bbx_mask[1] + bbx_mask[3] - 1]    # Bottom right mới
+        # cv2.rectangle(rotated_mask, tl_mask, br_mask, 255)
+        # cv2.imshow('mask',rotated_mask)
+
+        # Dịch ảnh
+        M = np.float32([[1, 0, shift_x-width], [0, 1, shift_y-height]])
+        shifted = cv2.warpAffine(rotated, M, (width, height),borderMode=cv2.BORDER_CONSTANT)
+
+        tl_mask[0] += shift_x-width
+        tl_mask[1] += shift_y-height
+        br_mask[0] += shift_x-width
+        br_mask[1] += shift_y-height
+
+        # Resize
         try:
-            blurred_img = cv2.GaussianBlur(img.copy(), (ksize, ksize), 0)
-            results = model.detect(blurred_img)
-            for result in results:
-                cv2.putText(blurred_img, result['name']+'    '+str(result['confidence'])+'%',(result['top left'][0],result['top left'][1]-5),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 0, 0), 1, lineType=cv2.LINE_AA)
-                cv2.rectangle(blurred_img, result['top left'], result['bottom right'], (0, 255, 0), 1)
+            resized = cv2.resize(shifted,(int(width*scale),int(height*scale)))
+            resized1 = cv2.resize(resized,(width,height))
+
+            tl_mask[0] = int(tl_mask[0]*scale)
+            tl_mask[1] = int(tl_mask[1]*scale)
+            br_mask[0] = int(br_mask[0]*scale)
+            br_mask[1] = int(br_mask[1]*scale)
+
         except:
-            pass
-        cv2.imshow('result', blurred_img)
+            cv2.waitKey(1)
+            continue
+
+
+        final = resized
+        # Hiển thị kết quả nhận dạng
+        results = model.detect(final)
+        for result in results:
+            cv2.putText(final, result['name'] + ' ' + str(result['confidence']) + '%',
+                        (result['top left'][0], result['top left'][1] - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 1, lineType=cv2.LINE_AA)
+            cv2.rectangle(final, result['top left'], result['bottom right'], (0, 0, 0), 2)
+        # Hiển thị kết quả bbox người đánh
+        # cv2.rectangle(final, tuple(tl_mask), tuple(br_mask), (255, 255, 0))
+        cv2.imshow('Result image',final)
+        cv2.waitKey(1)
+
+
+def get_mask(removed_bg_folder_dir, save_folder_dir, org_folder_dir):
+    removed_bg_filename = [i for i in os.listdir(removed_bg_folder_dir)]
+    index = 0
+    angle = 0
+    toggle = None
+    while index < len(removed_bg_filename):
+        ### Chỉ hiển thị 1 ảnh, bỏ cmt đoạn này để hiển thị toàn bộ
+        #  Nhấn nút bất kỳ để chuyển ảnh
+        # if removed_bg_filename != 'clamp_69_1-removebg-preview.png':
+        #     continue
+        ###
+
+        # Tạo mask
+        removed_bg_dir = os.path.join(removed_bg_folder_dir, removed_bg_filename[index])
+        removed_bg = cv2.imread(removed_bg_dir)
+        removed_bg_hsv = cv2.cvtColor(removed_bg, cv2.COLOR_BGR2HSV)
+        mask = 255 - cv2.inRange(removed_bg_hsv, (103, 220, 243), (103, 220, 243))
+        mask_bgr = cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)
+
+        # Lấy kích thước ảnh gốc để resize mask lại cho bằng ảnh gốc
+        org_filename = removed_bg_filename[index].replace('-removebg-preview', '')
+        org_dir = os.path.join(org_folder_dir, org_filename)
+        if not os.path.exists(org_dir): # Đổi lại đuôi nếu ảnh gốc không phải .png
+            org_dir = org_dir.replace('png', 'jpg')
+        org = cv2.imread(org_dir)
+        h, w = org.shape[:2]
+        mask_resized = cv2.resize(mask_bgr, (w, h), interpolation=cv2.INTER_NEAREST)
+
+        # Lưu mask
+        mask_filename = removed_bg_filename[index].replace('-removebg-preview', '_mask')
+        mask_dir = os.path.join(save_folder_dir, mask_filename)
+        cv2.imwrite(mask_dir, mask_resized)
+
+        # Test mask
+        mask_check_bgr = cv2.imread(mask_dir)
+        # if  np.all((mask_check_bgr > 0) & (mask_check_bgr < 255)):
+        #     print(mask_filename + ': co pixel khac 0 va 255')
+        # else:
+        #     print(mask_filename + ': tat ca pixel deu ok')
+        mask_check_gray = cv2.cvtColor(mask_check_bgr, cv2.COLOR_BGR2GRAY)
+        bbox = cv2.boundingRect(mask_check_gray)
+        x_center = bbox[0] + bbox[2] / 2 - 1
+        y_center = bbox[1] + bbox[3] / 2 - 1
+        rotate_matrix = cv2.getRotationMatrix2D((x_center, y_center), angle, 1.0)  # Lấy ma trận xoay
+        org = cv2.warpAffine(org, rotate_matrix, (w, h))  # Xoay ảnh
+        mask_check_bgr = cv2.warpAffine(mask_check_bgr, rotate_matrix, (w, h))  # Xoay mask
+        mask_check_gray = cv2.cvtColor(mask_check_bgr, cv2.COLOR_BGR2GRAY)
+        bbox = cv2.boundingRect(mask_check_gray)  # Tính lại bbox sau khi xoay
+        top_left = tuple(bbox[0:2])
+        bottom_right = (bbox[0] + bbox[2] - 1, bbox[1] + bbox[3] - 1)
+        cv2.rectangle(mask_check_bgr, top_left, bottom_right, (255, 0, 255), 1)
+        cv2.rectangle(org, top_left, bottom_right, (255, 0, 255), 1)
+        check_img = cv2.hconcat([org, mask_check_bgr])
+        cv2.imshow('Check', check_img)
+        if toggle == None or toggle == 2555904 or toggle == 2424832:
+            print('Current mask: ' + mask_filename)
+        toggle = cv2.waitKeyEx()
+        if toggle == 2555904:
+            index += 1
+            angle = 0
+        elif toggle == 2424832:
+            index -= 1
+            angle = 0
+        elif toggle == 45:
+            angle += 2
+        elif toggle == 43:
+            angle -= 2
+
+
+
+def testLineError(video_dir=None, cam=None):
+    if video_dir:
+        cap = cv2.VideoCapture(video_dir)
+    else:
+        cap = cv2.VideoCapture(cam)
+    h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    def callback(x):
+        pass
+
+    winName = 'Test line'
+    cv2.namedWindow(winName,0)
+    if video_dir:
+        numFrame = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        cv2.createTrackbar('idxFrame',winName,1,numFrame, callback)
+    cv2.createTrackbar('roi_tlx', winName, 199, w, callback)
+    cv2.createTrackbar('roi_tly', winName, 321, h, callback)
+    cv2.createTrackbar('roi_brx', winName, 428, w, callback)
+    cv2.createTrackbar('roi_bry', winName, 434, h, callback)
+    cv2.createTrackbar('thksize', winName, 37, 50, callback)
+    cv2.createTrackbar('c', winName, 0, 20, callback)
+    cv2.createTrackbar('bksize', winName, 7, 50, callback)
+    cv2.createTrackbar('maxThres', winName, 0, 255, callback)
+    cv2.createTrackbar('minThres', winName, 0, 255, callback)
+    cv2.createTrackbar('linThres', winName, 90, 200, callback)
+    cv2.createTrackbar('minLinLen',winName,74,100,callback)
+    cv2.createTrackbar('maxLinGap',winName,5,50,callback)
+
+    while 1:
+        roi_tlx = cv2.getTrackbarPos('roi_tlx',winName)
+        roi_tly = cv2.getTrackbarPos('roi_tly',winName)
+        roi_brx = cv2.getTrackbarPos('roi_brx',winName)
+        roi_bry = cv2.getTrackbarPos('roi_bry',winName)
+        thksize = cv2.getTrackbarPos('thksize',winName)
+        if not thksize % 2 or not thksize > 1:
+            cv2.waitKey(1)
+            continue
+        c = cv2.getTrackbarPos('c',winName)
+        bksize = cv2.getTrackbarPos('bksize',winName)
+        if not bksize % 2:
+            cv2.waitKey(1)
+            continue
+        maxThres = cv2.getTrackbarPos('maxThres',winName)
+        minThres = cv2.getTrackbarPos('minThres',winName)
+        linThres = cv2.getTrackbarPos('linThres',winName)
+        minLinLen = cv2.getTrackbarPos('minLinLen',winName)
+        maxLinGap = cv2.getTrackbarPos('maxLinGap',winName)
+        if video_dir:
+            idxFrame = cv2.getTrackbarPos('idxFrame', winName)
+            cap.set(cv2.CAP_PROP_POS_FRAMES, idxFrame - 1)
+
+        frame = cap.read()[1]
+        if frame is None:
+            sys.exit('Cannot grab the frame')
+        frame_roi = frame[roi_tly:roi_bry, roi_tlx:roi_brx].copy()
+        if not frame_roi.any():
+            cv2.waitKey(1)
+            continue
+        roi_gray = cv2.cvtColor(frame_roi,cv2.COLOR_BGR2GRAY)
+        blurred = cv2.GaussianBlur(roi_gray,(bksize,bksize),0)
+        thresholded = cv2.adaptiveThreshold(blurred,255,cv2.ADAPTIVE_THRESH_GAUSSIAN_C,cv2.THRESH_BINARY,thksize,c)
+        cannied = cv2.Canny(blurred,minThres,maxThres)
+        # laplacian = cv2.Laplacian(roi_gray,)
+        cv2.imshow('before_opening',thresholded)
+        kernel1 = np.array([[0,0,1],[0,1,0], [1,0,0]]).astype(np.uint8)
+        kernel2 = np.array([[0,0,0,1,0],[0,0,0,1,0],[0,0,1,0,0],[0,1,0,0,0], [0,1,0,0,0]]).astype(np.uint8)
+        thresholded = cv2.morphologyEx(thresholded,cv2.MORPH_OPEN,kernel2)
+        cv2.imshow('after_opening',thresholded)
+        lines = cv2.HoughLinesP(thresholded.copy(),1,np.pi/180,linThres,minLineLength=minLinLen,maxLineGap=maxLinGap)
+        # if lines is not None:
+        #     for i in range(0, len(lines)):
+        #         rho = lines[i][0][0]
+        #         theta = lines[i][0][1]
+        #         a = math.cos(theta)
+        #         b = math.sin(theta)
+        #         x0 = a * rho
+        #         y0 = b * rho
+        #         pt1 = (int(x0 + 1000 * (-b)), int(y0 + 1000 * (a)))
+        #         pt2 = (int(x0 - 1000 * (-b)), int(y0 - 1000 * (a)))
+        #         cv2.line(frame, pt1, pt2, (0, 0, 255), 1, cv2.LINE_AA)
+        if lines is not None:
+            for i in range(0, len(lines)):
+                l = lines[i][0]
+                cv2.line(frame, (roi_tlx+l[0], roi_tly+l[1]), (roi_tlx+l[2], roi_tly+l[3]), (0, 255, 0), 1, cv2.LINE_AA)
+        # cv2.imshow('Line test',thresholded)
+        cv2.imshow('frame',frame)
+        # cv2.imshow('cannied',cannied)
         cv2.waitKey(1)
 
 
 
+# getdata4linReg(data_dir='D:\\WON\\DO_AN\\Data\\Distance_estimate',
+#                weights_dir='D:\\WON\\DO_AN\\Code\\Model\\YOLOv3\\yolov3_best.weights',
+#                cfg_dir='D:\\WON\\DO_AN\\Code\\Model\\YOLOv3\\yolov3.cfg',
+#                names_dir='D:\\WON\\DO_AN\\Code\\Model\\YOLOv3\\obj.names',
+#                save_dir='D:\\WON\\DO_AN\\Code\\Quan')
+# time.sleep(1)
 
-# modelTest(r'D:\WON\DO_AN\Data\Training\Lan1\Damper\Images\gamma_corrected_no_repeat\damper_20_1.jpg')
-'''cv2.imshow("result",gamma_correct(img_dir='D:\\WON\\DO_AN\\Changed_data\\49.jpg',gamma=2))
-cv2.waitKey(0)'''
-'''getdata4linReg(data_dir='D:\\WON\\DO_AN\\Data\\Distance_estimate',
-               weights_dir='D:\\WON\\DO_AN\\Code\\Model\\YOLOv3\\yolov3_best.weights',
-               cfg_dir='D:\\WON\\DO_AN\\Code\\Model\\YOLOv3\\yolov3.cfg',
-               names_dir='D:\\WON\\DO_AN\\Code\\Model\\YOLOv3\\obj.names',
-               save_dir='D:\\WON\\DO_AN\\Code\\Quan')
-time.sleep(1)'''
-'''linear_regression(inv_w_array_dir='D:\\WON\\DO_AN\\Code\\Quan\\inv_w_array.npy',
-                  dis_array_dir='D:\\WON\\DO_AN\\Code\\Quan\\dis_array.npy')
-print(butter_lowpass_filter(data=[0,10],cutoff=1,fs=10,order=5))'''
-'''for image in os.listdir('D:\\WON\\DO_AN\\Cho_thay_xem'):
-    frame = cv2.imread('D:\\WON\\DO_AN\\Cho_thay_xem\\'+image)
-    detected_frame = yolov3_detect(frame)
-    cv2.imshow(image,detected_frame)
-    cv2.waitKey(0)
-    cv2.imwrite('D:\\WON\\DO_AN\\Cho_thay_xem\\'+image,detected_frame)'''
+# linear_regression(inv_w_array_dir='D:\\WON\\DO_AN\\Code\\Quan\\inv_w_array.npy',
+#                   dis_array_dir='D:\\WON\\DO_AN\\Code\\Quan\\dis_array.npy')
+# print(butter_lowpass_filter(data=[0,10],cutoff=1,fs=10,order=5))
+
+# for image in os.listdir('D:\\WON\\DO_AN\\Cho_thay_xem'):
+#     frame = cv2.imread('D:\\WON\\DO_AN\\Cho_thay_xem\\'+image)
+#     detected_frame = yolov3_detect(frame)
+#     cv2.imshow(image,detected_frame)
+#     cv2.waitKey(0)
+#     cv2.imwrite('D:\\WON\\DO_AN\\Cho_thay_xem\\'+image,detected_frame)
 
 # getTemplate(video_dir='D:\\WON\\DO_AN\\Code\\Huy\\video_test_day.avi',
 #                   save_dir='D:\\WON\\DO_AN\\Code\\Huy',
