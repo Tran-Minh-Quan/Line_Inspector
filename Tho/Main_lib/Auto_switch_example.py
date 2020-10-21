@@ -1,5 +1,5 @@
 import cv2
-from distance_calc import CircleBasedObjectDistance
+from distance_calc_lib import CircleBasedObjectDistance
 import os
 from Quan import QuanLib
 
