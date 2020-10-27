@@ -211,6 +211,7 @@ def edge_based(img, start_point, end_point, extended_ratio, canny_var_1, canny_v
             if ext_right - ext_left == 0:
                 return [-1, img, 1]
             distance = calculate_distance(object_width, focal_length, ext_right - ext_left)     # Calculate distance
+            print(ext_right-ext_left)
             # Draw contour for further troubleshooting
             img_1 = cv2.drawContours(crop_img.copy(), contours, -1, (0, 0, 255), 3)
             # Draw rectangle used for distance estimation

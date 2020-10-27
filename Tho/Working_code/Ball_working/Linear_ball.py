@@ -18,3 +18,4 @@ print("Intercept is: {}".format(intercept))
 print("Mean absolute error is: {}".format(mean_abs_err))
 print("Standard deviation error is: {}".format(std_deviation_err))
 print("Maximum error on set: {}".format(abs(my_y - prediction).max()))
+
