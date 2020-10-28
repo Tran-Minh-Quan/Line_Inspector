@@ -52,7 +52,7 @@ class Yolo:
                     boxes.append([top_left_x, top_left_y, bottom_right_x, bottom_right_y])
                     confidences.append(float(confidence))
                     detector_idxs.append(class_id)
-        indexes = cv2.dnn.NMSBoxes(boxes, confidences, 0, 0.4)
+        indexes = cv2.dnn.NMSBoxes(boxes, confidences, 0.5, 0.4)
 
         results = []
         for i in indexes:
@@ -422,6 +422,62 @@ def linear_regression(inv_w_array_dir = '',dis_array_dir = ''):
     plt.show()
     return
 
+def get_line_data(video_dir, save_folder_dir):
+    cap = cv2.VideoCapture(video_dir)
+    num_frame = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+    def callback(x):
+        pass
+    win_name = 'Get line image'
+    cv2.namedWindow(win_name)
+    cv2.createTrackbar('top_left_x', win_name, 0, w, callback)
+    cv2.createTrackbar('top_left_y', win_name, 210, h, callback)
+    cv2.createTrackbar('bottom_right_x', win_name, w, w, callback)
+    cv2.createTrackbar('bottom_right_y', win_name, 380, h, callback)
+    cv2.createTrackbar('frame', win_name, 1, num_frame - 1, callback)
+
+    line_index = 0
+    while (True):
+        # Cập nhật vị trí trackbar
+        top_left_x = cv2.getTrackbarPos('top_left_x', win_name)
+        top_left_y = cv2.getTrackbarPos('top_left_y', win_name)
+        bottom_right_x = cv2.getTrackbarPos('bottom_right_x', win_name)
+        bottom_right_y = cv2.getTrackbarPos('bottom_right_y', win_name)
+        frame_index = cv2.getTrackbarPos('frame', win_name)
+
+        cap.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
+        frame = cap.read()[1]
+        img = frame.copy()
+        cv2.rectangle(img, (top_left_x, top_left_y), (bottom_right_x, bottom_right_y),
+                      (0, 255, 0), 1)
+        info_panel = np.zeros((68, 640, 3), np.uint8)
+        info_panel[:, :] = [50, 50, 50]
+        if line_index:
+            info = 'Saved image: line_' + str(line_index) + '.png'
+        else:
+            info = 'No photos have been saved'
+        cv2.putText(info_panel, info, (110, 45), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 1,
+                    lineType=cv2.LINE_AA)
+        img = cv2.vconcat([info_panel, img])
+        cv2.imshow('Frame', img)
+        toggle = cv2.waitKeyEx(1)
+        if toggle == 2555904: # Mũi tên phải
+            frame_index += 1
+            cv2.setTrackbarPos('frame', win_name, frame_index)
+        elif toggle == 2424832: # Mũi tên trái
+            frame_index -= 1
+            cv2.setTrackbarPos('frame', win_name, frame_index)
+        elif toggle == 13: # Enter
+            line_index += 1
+            save_filename = 'line_' + str(line_index) + '.png'
+            save_dir = os.path.join(save_folder_dir, save_filename)
+            cv2.imwrite(save_dir, frame[top_left_y:bottom_right_y, top_left_x:bottom_right_x])
+            frame_index += 1
+            cv2.setTrackbarPos('frame', win_name, frame_index)
+
+
 # Chú thích cho get_template_tool(...):
 # Chức năng: Lấy template cho thuật toán template matching
 # Thuật toán cho phép xem từng frame của video và chọn ra frame lấy template
@@ -544,7 +600,6 @@ def testSegmentColor(img_or_video_dir):
         # cv2.imshow('frame',frame)
         cv2.imshow('fg',fg)
         cv2.waitKey(1)
-    cap.release()
     cv2.destroyAllWindows()
 
 
@@ -749,7 +804,7 @@ def get_mask(removed_bg_folder_dir, save_folder_dir, org_folder_dir):
         mask_check_bgr = cv2.warpAffine(mask_check_bgr, rotate_matrix, (w, h))  # Xoay mask
         mask_check_gray = cv2.cvtColor(mask_check_bgr, cv2.COLOR_BGR2GRAY)
         bbox = cv2.boundingRect(mask_check_gray)  # Tính lại bbox sau khi xoay
-        top_left = tuple(bbox[0:2])
+        top_left = (bbox[0], bbox[1])
         bottom_right = (bbox[0] + bbox[2] - 1, bbox[1] + bbox[3] - 1)
 
         cv2.rectangle(mask_check_bgr, top_left, bottom_right, (255, 0, 255), 1)
@@ -763,15 +818,17 @@ def get_mask(removed_bg_folder_dir, save_folder_dir, org_folder_dir):
         toggle = cv2.waitKeyEx()
         if toggle == 2555904:
             index += 1
-            angle = 0
+            if index == len(removed_bg_filename):
+                index = 0
         elif toggle == 2424832:
             index -= 1
+            if index < 0:
+                index = len(removed_bg_filename) - 1
             angle = 0
         elif toggle == 45:
             angle += 2
         elif toggle == 43:
             angle -= 2
-
 
 
 def testLineError(video_dir=None, cam=None):
@@ -868,23 +925,64 @@ class Data:
     def __init__(self,img_folder_dir=None):
         self.img_folder_dir = img_folder_dir
 
-    def test_label(self, label_folder_dir):
-        for label_filename in label_folder_dir:
-            label_dir = os.path.join(label_folder_dir,label_filename)
-            label = open(label_dir,'r').readlines()
-            label = [i.split('\n')[0].split(' ') for i in label]
-
-            # Đang viết dở
-
-            img_name = label_filename.split('.')[0]
-            img_dir = os.path.join(self.img_folder_dir, img_name + '.png')
-            if not os.path.exists(img_dir):
-                img_dir = os.path.join(self.img_folder_dir, img_name + '.jpg')
+    def test_augment(self, label_folder_dir):
+        img_filename = [i for i in os.listdir(self.img_folder_dir)
+                        if i.endswith('.png') or i.endswith('.jpg')]
+        index = 0
+        while True:
+            # Đọc ảnh
+            img_dir = os.path.join(self.img_folder_dir, img_filename[index])
             img = cv2.imread(img_dir)
+
+            # Đọc label
+            if img_filename[index].endswith('.png'):
+                label_filename = img_filename[index].replace('.png', '.txt')
+            elif img_filename[index].endswith('.jpg'):
+                label_filename = img_filename[index].replace('.jpg', '.txt')
+            label_dir = os.path.join(label_folder_dir, label_filename)
+            try:
+                label_file = open(label_dir, 'r')
+            except:
+                raise Exception(img_filename[index] + ' khong co label')
+            bbox = label_file.readlines()[0].split('\n')[0].split(' ')
+            bbox = [float(i) for i in bbox[1:]]
+            h, w = img.shape[:2]
+            top_left_x = round((bbox[0] - bbox[2] / 2) * w)
+            top_left_y = round((bbox[1] - bbox[3] / 2) * h)
+            bottom_right_x = round((bbox[0] + bbox[2] / 2) * w)
+            bottom_right_y = round((bbox[1] + bbox[3] / 2) * h)
+            top_left = (top_left_x, top_left_y)
+            bottom_right = (bottom_right_x, bottom_right_y)
+
+            # Vẽ box và hiển thị
+            cv2.rectangle(img, top_left, bottom_right, (0, 255, 0), 1)
+            info_panel = np.zeros((98, 640, 3), np.uint8)
+            info_panel[:, :] = [50, 50, 50]
+            info1 = 'Current image: ' + img_filename[index]
+            info2 = 'Index: ' + str(index)
+            cv2.putText(info_panel, info1, (25, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 255), 1,
+                        lineType=cv2.LINE_AA)
+            cv2.putText(info_panel, info2, (25, 75), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 1,
+                        lineType=cv2.LINE_AA)
+            img = cv2.vconcat([info_panel, img])
+            cv2.imshow('Image', img)
+
+            # Cài đặt điều khiển bằng keyboard
+            toggle = cv2.waitKeyEx()
+            if toggle == 2555904:
+                index += 1
+                if index == len(img_filename):
+                    index = 0
+            elif toggle == 2424832:
+                index -= 1
+                if index < 0:
+                    index = len(img_filename) - 1
+
 
     def augment(self, sequence, img_save_folder_dir=None, label_save_folder_dir=None,
                 mask_folder_dir=None,label_folder_dir=None, num_img=None):
-
+        extension = '.png'
+        augmented_namelist = []
         # Check xem có thiếu mask trong trường hợp rotate không
         if ('rotate' in [i[0] for i in sequence] \
                 or 'background' in [i[0] for i in sequence]) \
@@ -940,112 +1038,134 @@ class Data:
         else:
             sys.exit('Them mask_folder_dir hoac label_folder_dir')
 
-        # Khởi tạo các transformer của albumentations
-        motion_blur = a.Compose([a.MotionBlur(blur_limit=(param[1], param[2]), p=1)])
-        clahe = a.Compose([a.CLAHE])
-
-        # Làm dày
         num_img_dict = {i: 0 for i in img_dict}
         num_img_total = 0
+        # Làm dày
         while True:
             for img_name in img_dict:
                 img = img_dict[img_name].copy()
                 bbox = bbox_dict[img_name].copy()
+                h_img, w_img, deep = img.shape
                 if mask_folder_dir:
                     mask = mask_dict[img_name].copy()
-                for param in sequence:
-                    # param = [tên phương pháp biến đổi ảnh (shift, rotate,...),
-                    #          phạm vi min (= -1 nếu không cần),
-                    #          phạm vi max (= -1 nếu không cần),
-                    #         % xác suất xảy ra (max = 100)]
-                    if random.random() * 100 < param[3]:
-                        h_img, w_img, deep = img.shape
+                if num_img_dict[img_name] != 0:
+                    for param in sequence:
+                        ## param = [tên phương pháp biến đổi ảnh (shift, rotate,...),
+                        ##          phạm vi min (= -1 nếu không cần),
+                        ##          phạm vi max (= -1 nếu không cần),
+                        ##          % xác suất xảy ra (max = 100)]
+                        if random.random() * 100 < param[3]:
 
-                        if param[0] == 'gaussian blur':
-                            ksize = random.randrange(param[1], param[2] + 1, 2)
-                            img = cv2.GaussianBlur(img, (ksize, ksize), 0)
+                            if param[0] == 'gaussian blur':
+                                ksize = random.randrange(param[1], param[2] + 1, 2)
+                                img = cv2.GaussianBlur(img, (ksize, ksize), 0)
 
-                        elif param[0] == 'motion blur':
-                            img_rgb = cv2.cvtColor(img.copy(), cv2.COLOR_BGR2RGB)
-                            transformed = motion_blur(image=img_rgb)['image']
-                            img = cv2.cvtColor(transformed, cv2.COLOR_RGB2BGR)
+                            elif param[0] == 'motion blur':
+                                img_rgb = cv2.cvtColor(img.copy(), cv2.COLOR_BGR2RGB)
+                                motion_blur = a.Compose([a.MotionBlur(blur_limit=(param[1], param[2]), p=1)])
+                                transformed = motion_blur(image=img_rgb)['image']
+                                img = cv2.cvtColor(transformed, cv2.COLOR_RGB2BGR)
 
+                            elif param[0] == 'gamma':
+                                gamma = random.uniform(param[1], param[2])
+                                inv_gamma = 1 / gamma
+                                table = np.array([((i / 255.0) ** inv_gamma) * 255
+                                                  for i in np.arange(0, 256)]).astype("uint8")
+                                img = cv2.LUT(img, table)
 
-                        elif param[0] == 'gamma':
-                            gamma = random.uniform(param[1], param[2])
-                            inv_gamma = 1 / gamma
-                            table = np.array([((i / 255.0) ** inv_gamma) * 255
-                                              for i in np.arange(0, 256)]).astype("uint8")
-                            img = cv2.LUT(img, table)
+                            elif param[0] == 'background':
+                                mask_bgr = cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)
+                                img_rand = (np.random.rand(h_img, w_img, deep) * 256).astype(np.uint8)
+                                bg_rand = cv2.bitwise_and(img_rand, 255 - mask_bgr)
+                                fg = cv2.bitwise_and(img.copy(), mask_bgr)
+                                img = cv2.add(fg, bg_rand)
 
-                        elif param[0] == 'background':
-                            mask_bgr = cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)
-                            img_rand = (np.random.rand(h_img, w_img, deep) * 256).astype(np.uint8)
-                            bg_rand = cv2.bitwise_and(img_rand, 255 - mask_bgr)
-                            fg = cv2.bitwise_and(img.copy(), mask_bgr)
-                            img = cv2.add(fg, bg_rand)
+                            elif param[0] == 'rotate':
+                                x_center = bbox[0] + bbox[2] / 2 - 1
+                                y_center = bbox[1] + bbox[3] / 2 - 1
 
-                        elif param[0] == 'rotate':
-                            x_center = bbox[0] + bbox[2] / 2 - 1
-                            y_center = bbox[1] + bbox[3] / 2 - 1
-
-                            # Giới hạn góc xoay để không bị mất vật
-                            w_half_cross = x_center - bbox[0] + 1
-                            h_half_cross = y_center - bbox[1] + 1
-                            len_half_cross = math.sqrt(w_half_cross**2 + h_half_cross**2)
-                            dis_to_v_axis = min(x_center + 1, w_img - x_center)
-                            dis_to_h_axis = min(y_center + 1, h_img - y_center)
-                            min_dis_to_axis = min(dis_to_v_axis, dis_to_h_axis)
-                            if min_dis_to_axis < len_half_cross:
-                                if dis_to_h_axis < dis_to_v_axis:
-                                    angle_cross_axis = math.acos(bbox[3]/2/len_half_cross)
+                                ## Giới hạn góc xoay để không bị mất vật
+                                w_half_cross = x_center - bbox[0] + 1
+                                h_half_cross = y_center - bbox[1] + 1
+                                len_half_cross = math.sqrt(w_half_cross**2 + h_half_cross**2)
+                                dis_to_v_axis = min(x_center + 1, w_img - x_center)
+                                dis_to_h_axis = min(y_center + 1, h_img - y_center)
+                                min_dis_to_axis = min(dis_to_v_axis, dis_to_h_axis)
+                                if min_dis_to_axis < len_half_cross:
+                                    if dis_to_h_axis < dis_to_v_axis:
+                                        angle_cross_axis = math.acos(bbox[3]/2/len_half_cross)
+                                    else:
+                                        angle_cross_axis = math.acos(bbox[2]/2/len_half_cross)
+                                    angle_touchpoint_axis = math.acos(min_dis_to_axis/len_half_cross)
+                                    max_angle = math.degrees(angle_cross_axis - angle_touchpoint_axis)
+                                    max_angle = min(param[2], max_angle)
                                 else:
-                                    angle_cross_axis = math.acos(bbox[2]/2/len_half_cross)
-                                angle_touchpoint_axis = math.acos(min_dis_to_axis/len_half_cross)
-                                max_angle = math.degrees(angle_cross_axis - angle_touchpoint_axis)
-                                max_angle = min(param[2], max_angle)
-                            else:
-                                max_angle = param[2]
-                            if random.random() * 100 < param[3]:
-                                angle = random.uniform(-max_angle, max_angle)
-                                rotate_matrix = cv2.getRotationMatrix2D((x_center, y_center), angle, 1.0)
-                                img = cv2.warpAffine(img, rotate_matrix, (w_img, h_img))
-                                mask = cv2.warpAffine(mask, rotate_matrix, (w_img, h_img))  # Xoay ảnh
-                                bbox = list(cv2.boundingRect(mask))  # Tính lại bbox sau khi xoay
-                                # Test bbox sau khi xoay
-                                # tl_mask = [bbox[0], bbox[1]]  # Top left mới
-                                # br_mask = [bbox[0] + bbox[2] - 1,
-                                #            bbox[1] + bbox[3] - 1]  # Bottom right mới
-                                # cv2.rectangle(mask, tl_mask, br_mask, 255)
-                                # cv2.imshow('mask', mask)
-                        elif param[0] == 'shift':
-                            top_left_x, top_left_y = bbox[0], bbox[1]
-                            w_bbox, h_bbox = bbox[2], bbox[3]
-                            min_tx, min_ty = - top_left_x, - top_left_y
-                            max_tx = w_img - (top_left_x + w_bbox)
-                            max_ty = h_img - (top_left_y + h_bbox)
-                            tx = random.randint(min_tx, max_tx)
-                            ty = random.randint(min_ty, max_ty)
-                            shift_matrix = np.float32([[1, 0, tx], [0, 1, ty]])
-                            img = cv2.warpAffine(img, shift_matrix, (w_img, h_img), borderMode=cv2.BORDER_CONSTANT)
-                            if 'rotate' in [param[0] for param in sequence]:
-                                mask = cv2.warpAffine(mask, shift_matrix, (w_img, h_img), borderMode=cv2.BORDER_CONSTANT)
-                            bbox[0] += tx
-                            bbox[1] += ty
+                                    max_angle = param[2]
+                                ##
+                                if random.random() * 100 < param[3]:
+                                    angle = random.uniform(-max_angle, max_angle)
+                                    rotate_matrix = cv2.getRotationMatrix2D((x_center, y_center), angle, 1.0)
+                                    img = cv2.warpAffine(img, rotate_matrix, (w_img, h_img))
+                                    mask = cv2.warpAffine(mask, rotate_matrix, (w_img, h_img))  # Xoay ảnh
+                                    bbox = list(cv2.boundingRect(mask))  # Tính lại bbox sau khi xoay
+                                    # Test bbox sau khi xoay
+                                    # tl_mask = [bbox[0], bbox[1]]  # Top left mới
+                                    # br_mask = [bbox[0] + bbox[2] - 1,
+                                    #            bbox[1] + bbox[3] - 1]  # Bottom right mới
+                                    # cv2.rectangle(mask, tl_mask, br_mask, 255)
+                                    # cv2.imshow('mask', mask)
 
-                # Lưu ảnh mới tạo
+                            elif param[0] == 'shift':
+                                top_left_x, top_left_y = bbox[0], bbox[1]
+                                w_bbox, h_bbox = bbox[2], bbox[3]
+                                min_tx, min_ty = - top_left_x, - top_left_y
+                                max_tx = w_img - (top_left_x + w_bbox)
+                                max_ty = h_img - (top_left_y + h_bbox)
+                                tx = random.randint(min_tx, max_tx)
+                                ty = random.randint(min_ty, max_ty)
+                                shift_matrix = np.float32([[1, 0, tx], [0, 1, ty]])
+                                img = cv2.warpAffine(img, shift_matrix, (w_img, h_img), borderMode=cv2.BORDER_CONSTANT)
+                                if 'rotate' in [param[0] for param in sequence]:
+                                    mask = cv2.warpAffine(mask, shift_matrix, (w_img, h_img), borderMode=cv2.BORDER_CONSTANT)
+                                bbox[0] += tx
+                                bbox[1] += ty
+
+                            elif param[0] == 'noise':
+                                img_rgb = cv2.cvtColor(img.copy(), cv2.COLOR_BGR2RGB)
+                                gauss_noise = a.Compose([a.GaussNoise(var_limit=(param[1], param[2]), p=1)])
+                                transformed = gauss_noise(image=img_rgb)['image']
+                                img = cv2.cvtColor(transformed, cv2.COLOR_RGB2BGR)
+
+                            elif param[0] == 'jpeg':
+                                img_rgb = cv2.cvtColor(img.copy(), cv2.COLOR_BGR2RGB)
+                                jpeg = a.Compose([a.JpegCompression(quality_lower=param[1], quality_upper=param[2], p=1)])
+                                transformed = jpeg(image=img_rgb)['image']
+                                img = cv2.cvtColor(transformed, cv2.COLOR_RGB2BGR)
+
+                            elif param[0] == 'clahe':
+                                img_rgb = cv2.cvtColor(img.copy(), cv2.COLOR_BGR2RGB)
+                                jpeg = a.Compose([a.CLAHE(clip_limit=(1, 4), tile_grid_size=(8, 8), p=1)])
+                                transformed = jpeg(image=img_rgb)['image']
+                                img = cv2.cvtColor(transformed, cv2.COLOR_RGB2BGR)
+
+                ## Lưu ảnh mới tạo
+                if num_img_dict[img_name] == 0:
+                    img_save_name = img_name + extension
+                else:
+                    img_save_name = img_name + '_aug_' + str(num_img_dict[img_name]) + extension
                 num_img_dict[img_name] += 1
-                img_save_name = img_name + '_aug_' + str(num_img_dict[img_name]) + '.png'
+
                 img_save_dir = os.path.join(img_save_folder_dir, img_save_name)
                 cv2.imwrite(img_save_dir, img)
+                augmented_namelist.append(img_save_name)
 
-                # Test bbox sau khi làm dày
-                top_left = (bbox[0], bbox[1])
-                bottom_right = (bbox[0] + bbox[2] - 1, bbox[1] + bbox[3] - 1)
-                cv2.rectangle(img, top_left, bottom_right, (0, 255, 0))
-                cv2.imshow(img_name, img)
-                cv2.waitKey()
-                cv2.destroyAllWindows()
+                ## Test bbox sau khi làm dày
+                # top_left = (bbox[0], bbox[1])
+                # bottom_right = (bbox[0] + bbox[2], bbox[1] + bbox[3])
+                # cv2.rectangle(img, top_left, bottom_right, (0, 255, 0))
+                # cv2.imshow(img_name, img)
+                # cv2.waitKey()
+                # cv2.destroyAllWindows()
 
                 # Lưu label cho ảnh mới tạo
                 label_param = [None]*5
@@ -1056,12 +1176,12 @@ class Data:
                     label_param[0] = 1
                 elif obj_name == 'clamp':
                     label_param[0] = 2
-                label_param[1] = (bbox[0] + bbox[2]/2 - 1) / w_img
-                label_param[2] = (bbox[1] + bbox[3]/2 - 1) / h_img
+                label_param[1] = (bbox[0] + bbox[2]/2) / w_img
+                label_param[2] = (bbox[1] + bbox[3]/2) / h_img
                 label_param[3] = bbox[2] / w_img
                 label_param[4] = bbox[3] / h_img
-                label_dir = os.path.join(label_save_folder_dir, img_save_name.replace('.png', '.txt'))
-                label_file = open(label_dir,'w')
+                label_dir = os.path.join(label_save_folder_dir, img_save_name.replace(extension, '.txt'))
+                label_file = open(label_dir, 'w')
                 label_file.write(str(label_param).replace('[', '')
                                  .replace(', ', ' ').replace(']', '\n'))
                 label_file.close()
@@ -1070,29 +1190,95 @@ class Data:
                 print(str(num_img_total) + '/' + str(num_img))
                 if num_img_total >= num_img:
                     # print(num_img_dict)
-                    return
+                    return augmented_namelist
 
+def split_train_val(ball_list, damper_list, clamp_list, save_folder_dir, num_train=.8):
+    random.shuffle(ball_list)
+    random.shuffle(damper_list)
+    random.shuffle(clamp_list)
 
-get_mask(removed_bg_folder_dir=r'D:\WON\DO_AN\Data\Training\Lan1\Clamp\Images\Removedbg',
-         save_folder_dir=r'D:\WON\DO_AN\Data\Training\Lan1\Clamp\Images\Mask',
-         org_folder_dir=r'D:\WON\DO_AN\Data\Training\Lan1\Clamp\Images\Gamma_corrected')
+    train_list = []
+    train_list.extend(ball_list[:round(len(ball_list)*num_train)])
+    train_list.extend(damper_list[:round(len(damper_list)*num_train)])
+    train_list.extend(clamp_list[:round(len(clamp_list)*num_train)])
+    random.shuffle(train_list)
+    print('Number of images in train.txt: ' + str(len(train_list)))
 
-# data = Data(img_folder_dir=r'D:\WON\DO_AN\Data\Training\Lan1\Clamp\Images\Raw')
-# data.augment(sequence=[['background', -1, -1, 100],
-#                        ['gauss blur', 3, 21, 100],
-#                        ['gamma', 1, 3, 100],
-#                        ['shift', -1, -1, 100],
-#                        ['rotate', -45, 45, 100]],
-#              img_save_folder_dir=r'D:\WON\DO_AN\Data\Training\Lan1\Clamp\Images\Augmented',
-#              label_save_folder_dir=r'D:\WON\DO_AN\Data\Training\Lan1\Clamp\Labels\Augmented',
-#              mask_folder_dir=r'D:\WON\DO_AN\Data\Training\Lan1\Clamp\Images\Mask',
-#              num_img=222)
-# data.augment(sequence=[['shift', -1, -1, 100], ['rottate', -45, 45, 100]],
-#              img_save_folder_dir=r'D:\WON\DO_AN\Data\Training\Lan1\Clamp\Images\Augmented',
-#              label_save_folder_dir=r'D:\WON\DO_AN\Data\Training\Lan1\Clamp\Labels\Augmented',
-#              label_folder_dir=r'D:\WON\DO_AN\Data\Training\Lan1\Clamp\Labels\Origin',
-#              num_img=222)
+    val_list = []
+    val_list.extend(ball_list[round(len(ball_list) * num_train):])
+    val_list.extend(damper_list[round(len(damper_list) * num_train):])
+    val_list.extend(clamp_list[round(len(clamp_list) * num_train):])
+    random.shuffle(val_list)
+    print('Number of images in val.txt: ' + str(len(val_list)))
 
+    train_dir = os.path.join(save_folder_dir, 'train.txt')
+    train_file = open(train_dir, 'w')
+    train_lines = ['data/obj/' + i + '\n' for i in train_list]
+    train_file.writelines(train_lines)
+    train_file.close()
+
+    val_dir = os.path.join(save_folder_dir, 'val.txt')
+    val_file = open(val_dir, 'w')
+    val_lines = ['data/obj/' + i + '\n' for i in val_list]
+    val_file.writelines(val_lines)
+    val_file.close()
+    print('Done')
+
+get_line_data(video_dir=r'D:\WON\DO_AN\Data\Line\Video\line_2.avi',
+              save_folder_dir=r'D:\WON\DO_AN\Data\Line\Image')
+
+# get_mask(removed_bg_folder_dir=r'D:\WON\DO_AN\Data\Training\Lan1\Clamp\Images\Removedbg',
+#          save_folder_dir=r'D:\WON\DO_AN\Data\Training\Lan1\Clamp\Images\Mask',
+#          org_folder_dir=r'D:\WON\DO_AN\Data\Training\Lan1\Clamp\Images\Gamma_corrected')
+
+# Lấy mẫu 3 class
+# save_folder_dir = r'D:\WON\DO_AN\Data\Training\Lan1\obj'
+# clamp = Data(img_folder_dir=r'D:\WON\DO_AN\Data\Training\Lan1\Clamp\Images\Raw')
+# augmented_clamp_list = clamp.augment(sequence=[['clahe', -1, -1, 50],
+#                                                ['jpeg', 50, 100, 50],
+#                                                ['noise', 10, 200, 50],
+#                                                ['background', -1, -1, 50],
+#                                                ['gauss blur', 3, 17, 60],
+#                                                ['gamma', 1, 2.5, 100],
+#                                                ['shift', -1, -1, 80],
+#                                                ['rotate', -25, 25, 80]],
+#                      img_save_folder_dir=save_folder_dir,
+#                      label_save_folder_dir=save_folder_dir,
+#                      mask_folder_dir=r'D:\WON\DO_AN\Data\Training\Lan1\Clamp\Images\Mask',
+#                      num_img=200)
+# ball = Data(img_folder_dir=r'D:\WON\DO_AN\Data\Training\Lan1\Ball\Raw\Images')
+# augmented_ball_list = ball.augment(sequence=[['clahe', -1, -1, 50],
+#                                            ['jpeg', 50, 100, 50],
+#                                            ['noise', 10, 200, 50],
+#                                            ['background', -1, -1, 50],
+#                                            ['gauss blur', 3, 17, 60],
+#                                            ['gamma', 1, 2, 100],
+#                                            ['shift', -1, -1, 80],
+#                                            ['rotate', -180, 179, 80]],
+#                      img_save_folder_dir=save_folder_dir,
+#                      label_save_folder_dir=save_folder_dir,
+#                      mask_folder_dir=r'D:\WON\DO_AN\Data\Training\Lan1\Ball\Mask',
+#                      num_img=300)
+# damper = Data(img_folder_dir=r'D:\WON\DO_AN\Data\Training\Lan1\Damper\Images\Raw')
+# augmented_damper_list = damper.augment(sequence=[['clahe', -1, -1, 50],
+#                                                  ['jpeg', 50, 100, 50],
+#                                                  ['noise', 10, 200, 50],
+#                                                  ['gauss blur', 3, 17, 60],
+#                                                  ['gamma', 1, 2, 100],
+#                                                  ['shift', -1, -1, 80]],
+#                                        img_save_folder_dir=save_folder_dir,
+#                                        label_save_folder_dir=save_folder_dir,
+#                                        label_folder_dir=r'D:\WON\DO_AN\Data\Training\Lan1\Damper\Labels\Origin',
+#                                         num_img=250)
+# training_data = Data(r'D:\WON\DO_AN\Data\Training\Lan1\Damper\Images\Raw')
+# training_data.test_augment(label_folder_dir=r'D:\WON\DO_AN\Data\Training\Lan1\Damper\Labels\Origin')
+# split_train_val(ball_list=augmented_ball_list,
+#                 damper_list=augmented_damper_list,
+#                 clamp_list=augmented_clamp_list,
+#                 save_folder_dir=r'D:\WON\DO_AN\Data\Training\Lan1',
+#                 num_train=.5)
+#
+#
 
 # testLineError(video_dir=r'D:\WON\DO_AN\Data\Line\line_2.avi')
 
@@ -1123,16 +1309,17 @@ get_mask(removed_bg_folder_dir=r'D:\WON\DO_AN\Data\Training\Lan1\Clamp\Images\Re
 #     cv2.waitKey(0)
 #     cv2.imwrite('D:\\WON\\DO_AN\\Cho_thay_xem\\'+image,detected_frame)
 
-# getTemplate(video_dir='D:\\WON\\DO_AN\\Code\\Huy\\video_test_day.avi',
+# getTemplate(video_dir='D:\WON\DO_AN\Video\\video2.avi',
 #                   save_dir='D:\\WON\\DO_AN\\Code\\Huy',
-#                   template_name='quan1_template.jpg',
+#                   template_name='template_video2.jpg',
 #                   ROI=[220, 75, 420, 95])
 
 # CaptureSample('D:\\WON\\DO_AN\\Data', '.jpg', 0, 480, 640, 1, 20, 60)
 # getSampleImage(save_dir='D:\WON\DO_AN\Data\Distance\Damper_3',name='damper', beginIndex=20,
 #         imgPerIdxNum = 5, extention='.jpg', cam=1, height=480, width=640)
 # getSampleVideo(cam=1,save_dir='D:\WON\DO_AN\Data\Training',name='damper',extension='.avi',height=480,width=640)
-# gamma_correct(img_dir='D:\WON\DO_AN\Data\Distance\Damper_2\damper_20_1.jpg',data_dir='',gamma=4,save_dir='D:\WON\DO_AN\Data\Distance\Damper_2\damper_20_1_corrected.jpg')
+# gamma_correct(data_dir=r'D:\WON\DO_AN\Data\Training\Lan1\Damper\Images\Raw', gamma=2,
+#               save_dir=r'D:\WON\DO_AN\Data\Training\Lan1\Damper\Images\gamma_corrected_no_repeat')
 # cvtImages2Video(img_folder_dir=r'D:\WON\DO_AN\Data\Training\Lan1\Clamp\No_repeat_images',save_dir=r'D:\WON\DO_AN\Data\Training\Lan1\Clamp',video_name='clamp.mp4')
 
 
