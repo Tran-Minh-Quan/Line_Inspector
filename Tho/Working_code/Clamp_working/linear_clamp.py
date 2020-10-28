@@ -1,5 +1,6 @@
 from scipy import stats
 import numpy as np
+import pandas as pd
 my_y = np.arange(20, 100.1, 1)
 my_x = np.array([0.00377358490566, 0.003968253968254, 0.004132231404959, 0.004291845493562, 0.004464285714286
                 , 0.004587155963303, 0.004651162790698, 0.004830917874396, 0.004975124378109, 0.005025125628141
@@ -20,13 +21,19 @@ my_x = np.array([0.00377358490566, 0.003968253968254, 0.004132231404959, 0.00429
                 , 0.015151515151515])
 slope, intercept, r_value, p_value, std_err = stats.linregress(my_x, my_y)
 prediction = my_x * slope + intercept
+error = prediction - my_y
 mean_abs_err = sum(abs(my_y - prediction))/len(my_y)
-std_deviation_err = np.sqrt(sum(abs(my_y - prediction))/len(my_y))
+std_deviation_err = np.sqrt(sum(abs(my_y - prediction)**2)/len(my_y))
+
+df_prediction = pd.DataFrame(prediction)
+df_error = pd.DataFrame(error)
+df_prediction.to_excel('/media/tho/D drive/Documents/clamp_prediction.xlsx', index=False)
+df_error.to_excel('/media/tho/D drive/Documents/clamp_error.xlsx', index=False)
+
 print("Slope is: {}".format(slope))
 print("Intercept is: {}".format(intercept))
 print("Mean absolute error is: {}".format(mean_abs_err))
 print("Standard deviation error is: {}".format(std_deviation_err))
 print("Maximum error on set: {}".format(abs(my_y - prediction).max()))
-error = abs(my_y - prediction)
 print(np.argmax(error))
 print(my_x[np.argmax(error)])

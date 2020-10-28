@@ -131,7 +131,7 @@ class CircleDistance:
             return [-1, img_out, self.MULTIPLE_CIRCLES_ERROR]
         radius_pixel = circles[0][0][2]
         # Calculate distance with linear regression function
-        # print(radius_pixel)
+        print(radius_pixel) # Delete after testing
         distance = self.slope * 1/radius_pixel + self.intercept
         self.last_canny_param = canny_param
         self.redetect = 0
