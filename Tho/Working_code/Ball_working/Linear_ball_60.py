@@ -12,7 +12,7 @@ my_x = np.array([0.003711952487008, 0.003824091778203, 0.003980891719745, 0.0041
 slope, intercept, r_value, p_value, std_err = stats.linregress(my_x, my_y)
 prediction = my_x * slope + intercept
 mean_abs_err = sum(abs(my_y - prediction))/len(my_y)
-std_deviation_err = np.sqrt(sum(abs(my_y - prediction))/len(my_y))
+std_deviation_err = np.sqrt(sum(abs(my_y - prediction)**2)/len(my_y))
 print("Slope is: {}".format(slope))
 print("Intercept is: {}".format(intercept))
 print("Mean absolute error is: {}".format(mean_abs_err))
