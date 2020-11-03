@@ -1,14 +1,14 @@
 import cv2
 import numpy as np
-from distance_calc_lib import CircleBasedObjectDistance
+from Tho.Main_lib.distance_calc_lib import DistanceMultiClasses
 
 
 def nothing():
     pass
 
 
-CircleBasedObjectDistance_1 = CircleBasedObjectDistance(764)
-img = cv2.imread("Ball/ball_100_1.jpg")
+CircleBasedObjectDistance_1 = DistanceMultiClasses(764)
+img = cv2.imread("Ball/ball_30_1.jpg")
 red_channel = img[:, :, 2]
 green_channel = img[:, :, 1]
 blue_channel = img[:, :, 0]
@@ -29,7 +29,7 @@ while True:
     distance_1, img_out_1, error_1 = CircleBasedObjectDistance_1.calculate(eval_array_vis, (0, 0), (400, 600),
                                                                            0.2, "ball", 1)
     # cv2.imshow("Eval image", eval_array_vis)
-    # print("Distance is: {} (cm)".format(distance_1))
+    print("Distance is: {} (cm)".format(distance_1))
     cv2.imshow("Result", img_out_1)
     k = cv2.waitKey(100)
     if k == 27:

@@ -1,5 +1,5 @@
 import cv2
-from distance_calc_lib import CircleBasedObjectDistance
+from Tho.Main_lib.distance_calc_lib import CircleBasedObjectDistance
 import time
 
 
