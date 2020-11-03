@@ -6,13 +6,18 @@ import matplotlib.pyplot as plt
 import time
 import sys
 from sklearn.linear_model import LinearRegression
-from sklearn.metrics import mean_absolute_error
-from sklearn.metrics import mean_squared_error
-from sklearn.metrics import max_error
+# from sklearn.metrics import mean_absolute_error
+# from sklearn.metrics import mean_squared_error
+# from sklearn.metrics import max_error
 from scipy.signal import butter, filtfilt
+from collections import defaultdict
 import math
 import random
 import albumentations as a
+import xlwt
+from xlwt import Workbook
+import re
+import shutil
 
 
 class Yolo:
@@ -32,7 +37,7 @@ class Yolo:
     def detect(self,frame):
         frame_height, frame_width, frame_channels = frame.shape
         # Input blob thay vi frame de giam anh huong cua anh sang
-        blob = cv2.dnn.blobFromImage(frame, 1 / 255, (416, 416), (0, 0, 0), True, crop=False)
+        blob = cv2.dnn.blobFromImage(frame, 1 / 255, (608, 608), (0, 0, 0), True, crop=False)
         self.net.setInput(blob)
         outs = self.net.forward(self.output_layers)
         # hien_man_hinh
@@ -44,7 +49,7 @@ class Yolo:
                 scores = detection[5:]
                 class_id = np.argmax(scores)
                 confidence = scores[class_id]
-                if confidence > 0.5:
+                if confidence > 0:
                     top_left_x = round((detection[0] - detection[2] / 2) * frame_width)  # top left x = center_x - width
                     top_left_y = round((detection[1] - detection[3] / 2) * frame_height)  # top left y = center_y - height
                     bottom_right_x = round((detection[0] + detection[2] / 2) * frame_width)  # bottom right x = center_x + width
@@ -52,18 +57,19 @@ class Yolo:
                     boxes.append([top_left_x, top_left_y, bottom_right_x, bottom_right_y])
                     confidences.append(float(confidence))
                     detector_idxs.append(class_id)
-        indexes = cv2.dnn.NMSBoxes(boxes, confidences, 0.5, 0.4)
+        indexes = cv2.dnn.NMSBoxes(boxes, confidences, 0, 0.4)
 
         results = []
-        for i in indexes:
-            i = i[0]
-            obstacle = {}
-            obstacle['name'] = self.classes[detector_idxs[i]]
-            obstacle['confidence'] = round(confidences[i]*100)
-            obstacle['top left'] = (boxes[i][0],boxes[i][1])
-            obstacle['bottom right'] = (boxes[i][2],boxes[i][3])
-            obstacle['width'] = boxes[i][2] - boxes[i][0]
-            results.append(obstacle)
+        if np.any(indexes):
+            for i in indexes:
+                i = i[0]
+                obstacle = {}
+                obstacle['name'] = self.classes[detector_idxs[i]]
+                obstacle['confidence'] = round(confidences[i]*100)
+                obstacle['top left'] = (boxes[i][0],boxes[i][1])
+                obstacle['bottom right'] = (boxes[i][2],boxes[i][3])
+                obstacle['width'] = boxes[i][2] - boxes[i][0]
+                results.append(obstacle)
         return results
 
 
@@ -94,7 +100,7 @@ def gamma_correct(img_dir='',data_dir='',gamma=1,save_dir=''):
     if img_dir:
         origin_img = cv2.imread(img_dir)
         result_img = cv2.LUT(origin_img, table)
-        img_diff =  np.hstack([origin_img,result_img])
+        img_diff = np.hstack([origin_img,result_img])
         cv2.imshow("image difference",img_diff)
         cv2.waitKey(0)
         return result_img
@@ -477,6 +483,93 @@ def get_line_data(video_dir, save_folder_dir):
             frame_index += 1
             cv2.setTrackbarPos('frame', win_name, frame_index)
 
+def distance_regression(img_folder_dir, save_folder_dir=None):
+    # Khởi tạo các biến và các giá trị
+    model = Yolo(weights_dir=r'D:\WON\DO_AN\Data\Training\Lan2\Result\yolov4-custom_final.weights',
+                 cfg_dir='D:\\WON\\DO_AN\\Model\\yolov4-custom2.cfg',
+                 names_dir='D:\\WON\\DO_AN\\Code\\Model\\YOLOv3\\obj.names')
+    dis_array = np.array([])
+    inv_w_array = np.array([])
+    failed_img_list = []
+    index = 0
+    img_name_list = os.listdir(img_folder_dir)
+    gamma = 1
+    inv_gamma = 1.0 / gamma
+    inv_w_dict = defaultdict(list)
+    table = np.array([((i / 255.0) ** inv_gamma) * 255
+                      for i in np.arange(0, 256)]).astype("uint8")
+
+    # Lấy dữ liệu khoảng cách và nghịch đảo width của bbox
+    for img_name in img_name_list:
+        img_dir = os.path.join(img_folder_dir, img_name)
+        img = cv2.imread(img_dir)
+        # Tiền xử lý trước khi nhận dạng
+        img = cv2.LUT(img, table)
+        obstacle = model.detect(img)
+        if obstacle:
+            dis = float(img_name.split('_')[1])
+            inv_w = 1 / obstacle[0]['width']
+            inv_w_dict[dis].append(inv_w)
+        else:
+            failed_img_list.append(img_name)
+        index += 1
+        print('Getting data... ' + str(round(index/len(img_name_list)*100, 2)) + '%')
+    if failed_img_list:
+        print(str(len(failed_img_list)) + ' failed images: ' + str(failed_img_list))
+    inv_w_dict = {i: sum(inv_w_dict[i])/len(inv_w_dict[i]) for i in inv_w_dict} # Tính TB cho mỗi gt khoảng cách
+    dis_array = np.array(list(inv_w_dict.keys()))
+    inv_w_array = np.reshape(list(inv_w_dict.values()), (-1, 1))
+    model = LinearRegression().fit(inv_w_array, dis_array)
+    coef = model.coef_.item()
+    intercept = model.intercept_
+
+    # In kết quả ra màn hình
+    print('Coef = ' + str(coef))
+    print('Intercept= ' + str(intercept))
+    inv_w_array = inv_w_array.reshape(-1)
+    dis_pred_array = coef * inv_w_array + intercept
+    abs_error_array = abs(dis_pred_array - dis_array)
+    percent_error_array = abs_error_array / dis_array * 100
+    mean_absolute_error = abs_error_array.mean()
+    squared_error_array = (dis_pred_array - dis_array)**2
+    root_mean_squared_error = np.sqrt(squared_error_array.mean())
+
+
+    print('Mean absolute error = ' + str(mean_absolute_error))
+    print('Root mean squared error = ' + str(root_mean_squared_error))
+    max_error_index = np.argmax(abs_error_array)
+    max_error = abs_error_array[max_error_index]
+    print('Max error = ' + str(max_error))
+    print('Image at max error: ' + img_name_list[max_error_index])
+
+    # Workbook is created
+    wb = Workbook()
+    # add_sheet is used to create sheet.
+    sheet1 = wb.add_sheet('Sheet 1')
+    sheet1.write(0, 0, 'Kết quả đo đạc (cm)')
+    sheet1.write(0, 1, 'Kết quả từ thuật toán (cm)')
+    sheet1.write(0, 2, 'Sai số tuyệt đối (cm)')
+    sheet1.write(0, 3, 'Phần trăm sai số (%)')
+    for i in range(len(dis_pred_array)):
+        sheet1.write(i + 1, 0, dis_array[i])
+        sheet1.write(i + 1, 1, dis_pred_array[i])
+        sheet1.write(i + 1, 2, abs_error_array[i])
+        sheet1.write(i + 1, 3, percent_error_array[i])
+
+    wb.save(r'D:\WON\DO_AN\Data\Distance\Result\distance_result.xls')
+
+
+
+    # Vẽ đường hồi quy
+    plt.plot(inv_w_array, dis_array, 'o')
+    plt.plot(inv_w_array, dis_pred_array)
+    plt.xlabel('1/width (1/pixel)')
+    plt.ylabel('Distance (cm)')
+    plt.title("Linear regression")
+    plt.show()
+
+
+
 
 # Chú thích cho get_template_tool(...):
 # Chức năng: Lấy template cho thuật toán template matching
@@ -752,10 +845,11 @@ def modelTest(img_dir,bbox_dir,mask_dir):
         # Hiển thị kết quả nhận dạng
         results = model.detect(final)
         for result in results:
-            cv2.putText(final, result['name'] + ' ' + str(result['confidence']) + '%',
-                        (result['top left'][0], result['top left'][1] - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 1, lineType=cv2.LINE_AA)
-            cv2.rectangle(final, result['top left'], result['bottom right'], (0, 0, 0), 2)
+            pass
+            # cv2.putText(final, result['name'] + ' ' + str(result['confidence']) + '%',
+            #             (result['top left'][0], result['top left'][1] - 10),
+            #             cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 1, lineType=cv2.LINE_AA)
+            # cv2.rectangle(final, result['top left'], result['bottom right'], (0, 0, 0), 2)
         # Hiển thị kết quả bbox người đánh
         # cv2.rectangle(final, tuple(tl_mask), tuple(br_mask), (255, 255, 0))
         cv2.imshow('Result image',final)
@@ -764,10 +858,10 @@ def modelTest(img_dir,bbox_dir,mask_dir):
 
 def get_mask(removed_bg_folder_dir, save_folder_dir, org_folder_dir):
     removed_bg_filename = [i for i in os.listdir(removed_bg_folder_dir)]
-    index = 2
+    index = 0
     angle = 0
     toggle = None
-    while index < len(removed_bg_filename):
+    while True:
         # Tạo mask
         removed_bg_dir = os.path.join(removed_bg_folder_dir, removed_bg_filename[index])
         removed_bg = cv2.imread(removed_bg_dir)
@@ -829,6 +923,15 @@ def get_mask(removed_bg_folder_dir, save_folder_dir, org_folder_dir):
             angle += 2
         elif toggle == 43:
             angle -= 2
+
+def get_same_name_img(get_name_folder, get_img_folder, save_folder_dir=None):
+    img_list = []
+    name_list = [re.split('_|-|\.', i)[:2] for i in os.listdir(get_name_folder)]
+    for img_name in os.listdir(get_img_folder):
+        if re.split('_|-|\.', img_name)[:2] in name_list:
+            img_list.append(img_name)
+            shutil.copy2(os.path.join(get_img_folder, img_name),
+                      os.path.join(save_folder_dir, img_name))
 
 
 def testLineError(video_dir=None, cam=None):
@@ -979,8 +1082,8 @@ class Data:
                     index = len(img_filename) - 1
 
 
-    def augment(self, sequence, img_save_folder_dir=None, label_save_folder_dir=None,
-                mask_folder_dir=None,label_folder_dir=None, num_img=None):
+    def augment(self, sequence, img_save_folder_dir, label_save_folder_dir,
+                num_img, label, mask_folder_dir=None,label_folder_dir=None):
         extension = '.png'
         augmented_namelist = []
         # Check xem có thiếu mask trong trường hợp rotate không
@@ -1176,6 +1279,8 @@ class Data:
                     label_param[0] = 1
                 elif obj_name == 'clamp':
                     label_param[0] = 2
+                else:
+                    label_param[0] = label
                 label_param[1] = (bbox[0] + bbox[2]/2) / w_img
                 label_param[2] = (bbox[1] + bbox[3]/2) / h_img
                 label_param[3] = bbox[2] / w_img
@@ -1192,22 +1297,17 @@ class Data:
                     # print(num_img_dict)
                     return augmented_namelist
 
-def split_train_val(ball_list, damper_list, clamp_list, save_folder_dir, num_train=.8):
-    random.shuffle(ball_list)
-    random.shuffle(damper_list)
-    random.shuffle(clamp_list)
-
+def split_train_val(augmented_list, save_folder_dir, num_train=.8):
     train_list = []
-    train_list.extend(ball_list[:round(len(ball_list)*num_train)])
-    train_list.extend(damper_list[:round(len(damper_list)*num_train)])
-    train_list.extend(clamp_list[:round(len(clamp_list)*num_train)])
+    for sublist in augmented_list:
+        random.shuffle(sublist)
+        train_list.extend(sublist[:round(len(sublist) * num_train)])
     random.shuffle(train_list)
     print('Number of images in train.txt: ' + str(len(train_list)))
 
     val_list = []
-    val_list.extend(ball_list[round(len(ball_list) * num_train):])
-    val_list.extend(damper_list[round(len(damper_list) * num_train):])
-    val_list.extend(clamp_list[round(len(clamp_list) * num_train):])
+    for sublist in augmented_list:
+        val_list.extend(sublist[round(len(sublist) * num_train):])
     random.shuffle(val_list)
     print('Number of images in val.txt: ' + str(len(val_list)))
 
@@ -1224,12 +1324,20 @@ def split_train_val(ball_list, damper_list, clamp_list, save_folder_dir, num_tra
     val_file.close()
     print('Done')
 
-get_line_data(video_dir=r'D:\WON\DO_AN\Data\Line\Video\line_2.avi',
-              save_folder_dir=r'D:\WON\DO_AN\Data\Line\Image')
+# get_same_name_img(get_name_folder=r'D:\WON\DO_AN\Data\Line\Image\error\removedbg',
+#                   get_img_folder=r'D:\WON\DO_AN\Data\Line\Image\all_copy',
+#                   save_folder_dir=r'D:\WON\DO_AN\Data\Line\Image\test')
 
-# get_mask(removed_bg_folder_dir=r'D:\WON\DO_AN\Data\Training\Lan1\Clamp\Images\Removedbg',
-#          save_folder_dir=r'D:\WON\DO_AN\Data\Training\Lan1\Clamp\Images\Mask',
-#          org_folder_dir=r'D:\WON\DO_AN\Data\Training\Lan1\Clamp\Images\Gamma_corrected')
+# distance_regression(img_folder_dir=r'D:\WON\DO_AN\Data\Distance\Damper_2\Images\raw')
+# distance_regression(img_folder_dir=r'D:\WON\DO_AN\Data\Distance\Ball\Images')
+# distance_regression(img_folder_dir=r'D:\WON\DO_AN\Data\Distance\Clamp\Images')
+
+# get_line_data(video_dir=r'D:\WON\DO_AN\Data\Line\Video\line_2.avi',
+#               save_folder_dir=r'D:\WON\DO_AN\Data\Line\Image')
+
+# get_mask(removed_bg_folder_dir=r'D:\WON\DO_AN\Data\Line\Image\normal\removedbg',
+#          save_folder_dir=r'D:\WON\DO_AN\Data\Line\Image\normal\mask',
+#          org_folder_dir=r'D:\WON\DO_AN\Data\Line\Image\normal\raw')
 
 # Lấy mẫu 3 class
 # save_folder_dir = r'D:\WON\DO_AN\Data\Training\Lan1\obj'
@@ -1270,13 +1378,39 @@ get_line_data(video_dir=r'D:\WON\DO_AN\Data\Line\Video\line_2.avi',
 #                                        label_save_folder_dir=save_folder_dir,
 #                                        label_folder_dir=r'D:\WON\DO_AN\Data\Training\Lan1\Damper\Labels\Origin',
 #                                         num_img=250)
-# training_data = Data(r'D:\WON\DO_AN\Data\Training\Lan1\Damper\Images\Raw')
-# training_data.test_augment(label_folder_dir=r'D:\WON\DO_AN\Data\Training\Lan1\Damper\Labels\Origin')
-# split_train_val(ball_list=augmented_ball_list,
-#                 damper_list=augmented_damper_list,
-#                 clamp_list=augmented_clamp_list,
-#                 save_folder_dir=r'D:\WON\DO_AN\Data\Training\Lan1',
-#                 num_train=.5)
+
+save_folder_dir = r'D:\WON\DO_AN\Data\Line\Image\augmented'
+normal = Data(img_folder_dir=r'D:\WON\DO_AN\Data\Line\Image\not_augmented\normal\raw')
+augmented_normal_list = normal.augment(sequence=[['clahe', -1, -1, 50],
+                                               ['jpeg', 50, 100, 50],
+                                               ['noise', 10, 200, 50],
+                                               ['background', -1, -1, 50],
+                                               ['gauss blur', 3, 9, 60],
+                                               ['gamma', 0.3, 1.3, 100],
+                                               ['shift', -1, -1, 80]],
+                     img_save_folder_dir=save_folder_dir,
+                     label_save_folder_dir=save_folder_dir,
+                     mask_folder_dir=r'D:\WON\DO_AN\Data\Line\Image\not_augmented\normal\mask',
+                     num_img=200,
+                     label = 0)
+error = Data(img_folder_dir=r'D:\WON\DO_AN\Data\Line\Image\error\raw')
+augmented_error_list = error.augment(sequence=[['clahe', -1, -1, 50],
+                                           ['jpeg', 50, 100, 50],
+                                           ['noise', 10, 200, 50],
+                                           ['background', -1, -1, 50],
+                                           ['gauss blur', 3, 9, 60],
+                                           ['gamma', 0.3, 1.3, 100],
+                                           ['shift', -1, -1, 80]],
+                     img_save_folder_dir=save_folder_dir,
+                     label_save_folder_dir=save_folder_dir,
+                     mask_folder_dir=r'D:\WON\DO_AN\Data\Line\Image\error\mask',
+                     num_img=200,
+                     label = 1)
+# training_data = Data(save_folder_dir)
+# training_data.test_augment(save_folder_dir)
+split_train_val(augmented_list=[augmented_normal_list, augmented_error_list],
+                save_folder_dir=r'D:\WON\DO_AN\Data\Line\Image',
+                num_train=.5)
 #
 #
 
@@ -1284,9 +1418,9 @@ get_line_data(video_dir=r'D:\WON\DO_AN\Data\Line\Video\line_2.avi',
 
 # testSegmentColor(r'D:\WON\DO_AN\Data\Training\Lan1\Damper\Images\Foreground\Raw\damper_20_1_segmented.jpg')
 
-# modelTest(img_dir=r'D:\WON\DO_AN\Data\Training\Lan1\Clamp\Images\Raw\clamp_100_1.jpg',
-#           bbox_dir=r'D:\WON\DO_AN\Data\Training\Lan1\Clamp\Labels\Origin\clamp_100_1.txt',
-#           mask_dir=r'D:\WON\DO_AN\Data\Training\Lan1\Clamp\Images\Mask\clamp_100_1_mask.png')
+# modelTest(img_dir=r'D:\WON\DO_AN\Data\Line\Image\not_augmented\error\raw\line_32.png',
+#           bbox_dir=r'D:\WON\DO_AN\Data\Training\Lan1\Clamp\Labels\Origin\clamp_40_1.txt',
+#           mask_dir=r'D:\WON\DO_AN\Data\Training\Lan1\Clamp\Images\Mask\clamp_40_1_mask.png')
 
 # cv2.imshow("result",gamma_correct(img_dir='D:\\WON\\DO_AN\\Changed_data\\49.jpg',gamma=2))
 # cv2.waitKey(0)
@@ -1318,8 +1452,8 @@ get_line_data(video_dir=r'D:\WON\DO_AN\Data\Line\Video\line_2.avi',
 # getSampleImage(save_dir='D:\WON\DO_AN\Data\Distance\Damper_3',name='damper', beginIndex=20,
 #         imgPerIdxNum = 5, extention='.jpg', cam=1, height=480, width=640)
 # getSampleVideo(cam=1,save_dir='D:\WON\DO_AN\Data\Training',name='damper',extension='.avi',height=480,width=640)
-# gamma_correct(data_dir=r'D:\WON\DO_AN\Data\Training\Lan1\Damper\Images\Raw', gamma=2,
-#               save_dir=r'D:\WON\DO_AN\Data\Training\Lan1\Damper\Images\gamma_corrected_no_repeat')
+# gamma_correct(img_dir=r'D:\WON\DO_AN\Data\Line\Image\not_augmented\error\raw\line_48.png', gamma=1.5,
+#               save_dir=None)
 # cvtImages2Video(img_folder_dir=r'D:\WON\DO_AN\Data\Training\Lan1\Clamp\No_repeat_images',save_dir=r'D:\WON\DO_AN\Data\Training\Lan1\Clamp',video_name='clamp.mp4')
 
 
