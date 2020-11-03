@@ -4,6 +4,7 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 import time
+import sys
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_absolute_error
 from sklearn.metrics import mean_squared_error
@@ -67,8 +68,8 @@ class Yolov3:
             self.name = self.classes[detector_idxs[i]]
             self.confidence = confidences[i]
             '''cv2.rectangle(frame, (self.top_left_x, self.top_left_y), (self.bottom_right_x, self.bottom_right_y), (0, 250, 0), 2)
-            cv2.putText(frame, str(self.index) + '  ' + str(np.round(self.confidence * 100, 2)) + '%',
-                        (self.top_left_x, self.top_left_y),
+            cv2.putText(frame, self.name + '  ' + str(np.round(self.confidence * 100, 2)) + '%',
+                        (self.top_left_x, self.top_left_y-10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (250, 0, 0), 1, lineType=cv2.LINE_AA)'''
             # cv2.imshow('frame',frame)
             # cv2.waitKey(0)
@@ -118,30 +119,29 @@ def gamma_correct(img_dir='',data_dir='',gamma=1,save_dir=''):
 
 
 def CaptureSample(save_dir='',extention='.jpg',cam=0,heigth=480,width=640,color=1,dmin=20,dmax=60):
-    cap=cv2.VideoCapture(cam)
-    #cap.set(4,int(heigth) )
-    #cap.set(3,int(width))
+    cap = cv2.VideoCapture(cam)
+    cap.set(4,int(heigth) )
+    cap.set(3,int(width))
     if not cap.isOpened():
-        print('Could not open camera')
-        return
+        sys.exit('Could not open camera')
     i = dmin
     while i <= dmax:
-        ok,img=cap.read()
+        ok,frame = cap.read()
         if not ok:
             break
         if color==0:
-          img=cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
-        cv2.imshow('captured image',img)
+          frame = cv2.cvtColor(frame ,cv2.COLOR_BGR2GRAY)
+        cv2.imshow('frame',frame)
         k = cv2.waitKey(300) & 0xff
         if (k == 27):
             break
         elif (k == ord('s')):
             cv2.destroyAllWindows()
-            cv2.imwrite(save_dir + '\\' + str(i) + extention, img)
+            cv2.imwrite(save_dir + '\\' + str(i) + extention, frame)
             '''for j in range(1,11):
                 cv2.destroyAllWindows()
-                cv2.imwrite(save_dir+'\\'+str(i)+'.'+str(j)+extention,img)'''
-            cv2.imshow(str(i)+extention+'  saved',img)
+                cv2.imwrite(save_dir+'\\'+str(i)+'.'+str(j)+extention,frame)'''
+            cv2.imshow(str(i)+extention+'  saved',frame)
             #f = open(dlink+name+str(i)+'.txt','x+')
             #f.write(str(dmax))
             #f.close()
@@ -151,13 +151,207 @@ def CaptureSample(save_dir='',extention='.jpg',cam=0,heigth=480,width=640,color=
                 os.remove(save_dir + '\\' + str(i) + extention)
                 '''for j in range(1,11):
                     os.remove(save_dir+'\\'+str(i)+'.'+str(j)+extention)'''
-                cv2.imshow(str(i)+extention+'  deleted',img)
+                cv2.imshow(str(i)+extention+'  deleted',frame)
                 cv2.waitKey()
                 cv2.destroyAllWindows()
             else:
                 i += 1
     cap.release()
     cv2.destroyAllWindows()
+
+
+# Lấy mẫu ảnh
+# Nhấp trái chuột vào hình để xác nhận lấy frame hiện tại
+# Nhấp trái chuột vào hình lần nữa để quay lại chế độ livestream
+# Nhấp phải chuột vào hình  để xóa hình mới lưu
+# Nhấp phải chuột vào hình lần nữa để xóa hình đã lưu trước đó
+# Input:
+# save_dir: địa chỉ thư mục lưu ảnh, để dưới dạng '\' cũng được
+# name: tên ảnh
+# beginIndex = số thứ tự ảnh bắt đầu
+# imgPerIdxNum: số ảnh mỗi index, số thứ tự các ảnh này được biểu diễn bởi sub_index
+# extension: đuôi ảnh, vd '.jpg', '.png'
+# cấu trúc tên file: name + '_' + index + '_' + sub_index + extension
+# cam: nếu cam là số thì là chọn camera để lấy mẫu, nếu cam là str thì là đường dẫn tới video dùng để lấy mẫu
+# height: chiều cao ảnh
+# width: chiều dài ảnh'''
+def getSampleImage(save_dir, name, beginIndex=20, imgPerIdxNum = 0, extention='.jpg', cam=1, height=480, width=640):
+  # Capture frame
+  cap = cv2.VideoCapture(cam)
+  # Kiểm tra xem lấy được frame chưa
+  if not cap.isOpened():
+    sys.exit('Could not open camera')
+  # Chỉnh lại kích thước ảnh
+  cap.set(4, int(height))
+  cap.set(3, int(width))
+  # Tạo title lúc mới khởi động
+  title = np.zeros((58, 640, 3), dtype=np.uint8)
+  cv2.putText(title, 'Right click to save', (105, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 255, 255), 2,
+              lineType=cv2.LINE_AA)
+  # Khởi tạo các biến
+  global isCapturing, index, sub_index, frame #Khai báo biến toàn cục để sử dụng chung với hàm con
+  index = beginIndex
+  sub_index = 1
+  isCapturing = False
+
+  # Hàm gọi tới khi nhấn chuột:
+  def mouseCallback(event, x, y, flags, param):
+    # Khai báo biến toàn cục để sử dụng chung với hàm mẹ
+    global isCapturing, index, sub_index, frame
+    # Thao tác khi nhấp trái chuột
+    if event == cv2.EVENT_LBUTTONDOWN:
+      # Đảo trạng thái của cờ cho biết đang lấy hình hay không
+      isCapturing = not isCapturing
+      # Thao tác khi đang lấy hình
+      if isCapturing:
+        # Tăng chỉ số khoảng cách thêm 1
+        index += 1
+        # Nếu mỗi khoảng cách 1 ảnh
+        if imgPerIdxNum == 1:
+          ok, frame = cap.read()
+          title = np.zeros((58, 640, 3), dtype=np.uint8)
+          imageName = name + '_' + str(index-1) + extention
+          cv2.putText(title, imageName + ' saved', (105, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 255, 0), 2,
+                      lineType=cv2.LINE_AA)
+          cv2.imwrite(save_dir + '/' + imageName, frame)
+          cv2.imshow('frame', cv2.vconcat([title, frame]))
+        # Nếu mỗi khoảng cách lấy nhiều ảnh, tự động lấy imgPerIdxNum liên tiếp, cách nhau 0.5s
+        else:
+          for sub_index in range(1,imgPerIdxNum+1):
+            ok, frame = cap.read()
+            title = np.zeros((58, 640, 3), dtype=np.uint8)
+            imageName = name + '_' + str(index-1) + '_' + str(sub_index) + extention
+            cv2.putText(title, imageName + ' saved', (85, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 255, 0), 2,
+                        lineType=cv2.LINE_AA)
+            cv2.imwrite(save_dir + '/' + imageName, frame)
+            cv2.imshow('frame', cv2.vconcat([title, frame]))
+            cv2.waitKey(500)
+    # Thao tác khi nhấp phải chuột
+    elif event == cv2.EVENT_RBUTTONDOWN:
+        # Nếu mỗi khoảng cách 1 ảnh
+        if imgPerIdxNum == 1:
+          title = np.zeros((58, 640, 3), dtype=np.uint8)
+          imageName = name + '_' + str(index-1) + extention
+          cv2.putText(title, imageName + ' deleted', (105, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 0, 255), 2,
+                      lineType=cv2.LINE_AA)
+          deleted_frame = cv2.imread(save_dir + '/' + imageName)
+          cv2.imshow('frame', cv2.vconcat([title, deleted_frame]))
+          os.remove(save_dir + '/' + imageName)
+        # Nếu mỗi khoảng cách lấy nhiều ảnh, tự động xóa imgPerIdxNum liên tiếp, hiển thị ảnh sẽ xóa cách nhau 0.5s
+        else:
+          for sub_index in reversed(range(1, imgPerIdxNum + 1)):
+            title = np.zeros((58, 640, 3), dtype=np.uint8)
+            imageName = name + '_' + str(index-1) + '_' + str(sub_index) + extention
+            cv2.putText(title, imageName + ' deleted', (65, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 0, 255), 2,
+                        lineType=cv2.LINE_AA)
+            deleted_frame = cv2.imread(save_dir + '/' + imageName)
+            cv2.imshow('frame', cv2.vconcat([title,deleted_frame]))
+            cv2.waitKey(500)
+            os.remove(save_dir + '/' + imageName)
+        index -= 1
+    return
+  # Tạo cửa sổ hiển thị và cài đặt ngắt lên cửa sổ đó
+  cv2.namedWindow('frame')
+  cv2.setMouseCallback('frame', mouseCallback)
+
+  # Vòng lặp chính
+  while True:
+    # Nếu không đang lấy frame thì lấy và hiển thị frame mới
+    if not isCapturing:
+      ok, frame = cap.read()
+      if not ok:
+        break
+      cv2.imshow('frame', cv2.vconcat([title,frame]))
+    # Nếu đang lấy frame thì giữ cửa sổ hiển thị
+    key = cv2.waitKey(1)
+    # Ấn esc để thoát
+    if key == 27:
+      break
+
+  # Tắt cam và đóng hết các cửa sổ khi thoát
+  cap.release()
+  cv2.destroyAllWindows()
+  return
+
+
+# Dùng để lấy video mẫu
+# Nhấp trái chuột vào màn hình để bắt đầu ghi hình
+# Nhấp trái chuột vào màn hình lần nữa để tạm dừng, các frame hình từ lúc này sẽ không được ghi lại
+# Nhấp trái chuột vào màn hình lần nữa để tiếp tục ghi hình
+# Nhấp phải chuột vào màn hình để dừng ghi hình và lưu video hiện tại
+# Nhấn esc để thoát
+# Input:
+# cam: chọn camera
+# save_dir: đường dẫn đến thư mục lưu video
+# name: tên video
+# beginIndex: số thứ tự bắt đầu của video
+# extension: đuôi video
+# cấu trúc tên = name + '_' + index + extension
+# height: chiều dọc video
+# width: chiều ngang video
+def getSampleVideo(cam, save_dir,name,beginIndex=1,extension='.avi',height=480,width=640):
+  # Mở camera
+  cap = cv2.VideoCapture(cam)
+  if not cap.isOpened():
+    print('Unable to open camera')
+  # Cài đặt kích thước frame ảnh camera lấy
+  cap.set(4, int(height))
+  cap.set(3, int(width))
+  # Khởi tạo bộ lấy video
+  fourcc = cv2.VideoWriter_fourcc('M','J','P','G')
+  global isRecording, paused, video_writer, index
+  index = beginIndex
+  video_dir = save_dir + '/' + name + '_' + str(index) + extension
+  video_writer = cv2.VideoWriter(video_dir,fourcc,30,(width,height))
+  # Khởi tạo các biến và title dùng để hiển thị
+  isRecording, paused = False, False
+  default_title = np.zeros((58, 640, 3), dtype=np.uint8)
+  cv2.putText(default_title, '|> Right click to record', (35, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 255, 255), 2,
+              lineType=cv2.LINE_AA)
+  recording_title = np.zeros((58, 640, 3), dtype=np.uint8)
+  cv2.putText(recording_title, 'Recording...', (180, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 255, 0), 2,
+              lineType=cv2.LINE_AA)
+  paused_title = np.zeros((58, 640, 3), dtype=np.uint8)
+  cv2.putText(paused_title, '| | Paused', (200, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 0, 255), 2,
+              lineType=cv2.LINE_AA)
+  # Tạo hàm gọi đến khi click chuột
+  def mouseCallback(event, x, y, flags, param):
+    global isRecording, paused, video_writer, index
+    if event == cv2.EVENT_LBUTTONDOWN:
+      if not isRecording:
+        isRecording = True
+      else:
+        paused = not paused
+    if event == cv2.EVENT_RBUTTONDOWN:
+      index += 1
+      isRecording, paused = False, False
+      video_writer.release()
+      video_dir = save_dir + '/' + name + '_' + str(index) + extension
+      fourcc = cv2.VideoWriter_fourcc('M', 'J', 'P', 'G')
+      video_writer = cv2.VideoWriter(video_dir, fourcc, 30, (width, height))
+    return
+  # Tạo cửa sổ hiển thị và cài đặt ngắt lên cửa sổ đó
+  winName = 'frame'
+  cv2.namedWindow(winName)
+  cv2.setMouseCallback(winName,mouseCallback)
+  # Main loop
+  while True:
+    _, frame = cap.read()
+    if paused:
+      cv2.imshow(winName, cv2.vconcat([paused_title, frame]))
+    elif isRecording:
+      video_writer.write(frame)
+      cv2.imshow(winName, cv2.vconcat([recording_title, frame]))
+    else:
+      cv2.imshow(winName, cv2.vconcat([default_title, frame]))
+    if cv2.waitKey(1) == 27:
+      break
+  # Tắt cam, xóa bộ tạo video, xóa video thừa
+  cap.release()
+  video_writer.release()
+  cv2.destroyAllWindows()
+  os.remove(save_dir + '/' + name + '_' + str(index) + extension)
+  return
 
 
 #Lay du lieu khoang cach va nghich dao do dai box tu data_dir
@@ -286,7 +480,7 @@ def linear_regression(inv_w_array_dir = '',dis_array_dir = ''):
 # Input: đường dẫn tới video và thư mục lưu template,tên template, ROI
 # ROI = [top_left_x,top_left_y, bottom_right_x, bottom_right_y]
 # Output: template
-def get_template_tool(video_dir, save_dir,template_name, ROI):
+def getTemplate(video_dir, save_dir,template_name, ROI):
     cap = cv2.VideoCapture(video_dir)
     frameNum = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -335,7 +529,6 @@ def get_template_tool(video_dir, save_dir,template_name, ROI):
     return
 
 
-
 '''cv2.imshow("result",gamma_correct(img_dir='D:\\WON\\DO_AN\\Changed_data\\49.jpg',gamma=2))
 cv2.waitKey(0)'''
 '''getdata4linReg(data_dir='D:\\WON\\DO_AN\\Data\\Distance_estimate',
@@ -359,3 +552,8 @@ print(butter_lowpass_filter(data=[0,10],cutoff=1,fs=10,order=5))'''
                   template_name='quan1_template.jpg',
                   ROI=[220, 75, 420, 95])'''
 
+#CaptureSample('D:\\WON\\DO_AN\\Data', '.jpg', 0, 480, 640, 1, 20, 60)
+# getSampleImage(save_dir='D:\WON\DO_AN\Data',name='test', beginIndex=20,
+#         imgPerIdxNum = 5, extention='.jpg', cam=0, height=480, width=640)
+'''getSampleVideo(cam=1,save_dir='D:\WON\DO_AN\Data\Training\Damper',name='damper',extension='.avi',height=480,width=640)'''
+'''gamma_correct(img_dir='D:\WON\DO_AN\Data\Training\Ball\\ball_20_1.jpg',data_dir='',gamma=2.5,save_dir='D:\WON\DO_AN\Data\Training\Ball\\ball_20_1.jpg')'''
